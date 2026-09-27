@@ -14,8 +14,15 @@
 #   CHECKED     : same as PRELIMINARY, plus ERC/DRC reports
 #   RELEASED    : same as CHECKED. Selected automatically in CI when a
 #                 semantic version tag (x.y.z) is pushed
-# Any other name is treated as an assembly variant (outputs in Variants/).
+# Any other name is treated as an assembly variant (outputs in Variants/<name>).
 variant: DRAFT
+
+# Assembly variants (KiCad 10 variants, Schematic Setup > Variants),
+# space-separated, i.e. `assembly_variants: LITE PRO`. Generated after each
+# CHECKED / RELEASED run (locally with ./run_kibot.sh -v NAME), outputs in
+# Variants/<name>, BoM / pick and place / assembly files attached to the
+# releases. Empty: none.
+assembly_variants:
 
 # KiBot docker image (KiCad 10 + KiBot + Blender). Pin a precise tag for
 # reproducible builds. Tags: https://github.com/INTI-CMNB/kicad_auto/pkgs/container/kicad10_auto_full

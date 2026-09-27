@@ -42,15 +42,20 @@ variants:
     variant: RELEASED
     exclude_filter: '_null'
 
-  # Assembly variants (run with the same flags as RELEASED, outputs go to
-  # the Variants/ folder). Use the KiBoM "Config" field of the symbols.
+  # Assembly variants: KiCad 10 variants (Schematic Setup > Variants, then the
+  # per-variant DNP / fields of the symbols). KiBot imports them from the
+  # project, nothing to declare here. List them in `assembly_variants` of
+  # kibot_settings.yaml, or run one with `./run_kibot.sh -v NAME`: same outputs
+  # as RELEASED, in Variants/<name>, files suffixed with _<name>.
 
-  # - name: 'EXAMPLE'
-  #   comment: 'Example'
-  #   type: kibom
-  #   file_id: _(EXAMPLE)
-  #   variant: EXAMPLE
-  #   exclude_filter: '_null'
+  # Assembly variant selected by kibot_launch.sh (-E ASSEMBLY_VARIANT=NAME,
+  # comment = its description in the project). KiBot checks the variant given
+  # on the command line before importing the project variants: it must be
+  # declared here. Not used by the status variants.
+  - name: '@ASSEMBLY_VARIANT@'
+    comment: '@ASSEMBLY_VARIANT_COMMENT@'
+    type: kicad
+    file_id: '_@ASSEMBLY_VARIANT@'
 
 groups:
 
@@ -68,6 +73,18 @@ groups:
       # - @HTML_KICANVAS_OUTPUT@ # Very experimental, excluded for now
       - @HTML_KIRI_OUTPUT@
       - @HTML_NAV_RES_OUTPUT@
+
+  # Generated for the assembly variants (kibot_launch.sh -v NAME): what
+  # changes with the fitted parts. Gerbers, fabrication documents, KiRI and
+  # README are the same as the main run.
+  - name: variant_group
+    outputs:
+      - @NETLIST_OUTPUT@
+      - bom
+      - 3d
+      - assembly
+      - @PDF_SCHEMATIC_OUTPUT@
+      - jlcpcb
 
   # Generated for DRAFT
   - name: draft_group
@@ -203,6 +220,7 @@ import:
       SCRIPTS_DIR: @SCRIPTS_DIR@
       FABRICATION_DIR: @FABRICATION_DIR@
       ASSEMBLY_DIR: @ASSEMBLY_DIR@
+      OUTPUT_ROOT: @OUTPUT_ROOT@
 
   # Generate ERC Report
   - file: kibot_pre_erc_report.yaml
@@ -637,6 +655,14 @@ definitions:
   # References to exclude from testpoint highlighting ==========================
 
   EXCLUDE_REFS: '[MB*]' # for components on the PCB but not on the schematic
+
+  # Output folder (-d) of the run, set by kibot_launch.sh: the notes are read
+  # back from it (Variants/<name> for the assembly variants)
+  OUTPUT_ROOT: .
+
+  # Assembly variant (set by kibot_launch.sh -v NAME, see `variants:`)
+  ASSEMBLY_VARIANT: Default
+  ASSEMBLY_VARIANT_COMMENT: Default KiCad variant
 
   # 3D renders =================================================================
 

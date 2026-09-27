@@ -34,6 +34,7 @@ check_flag=true
 server_flag=false
 server_port=8000
 log_dir=""
+variants_flag=true
 stackup=""
 force_flag=false
 no_fill_flag=false
@@ -55,6 +56,8 @@ function display_help() {
     echo -e "                              kibot_yaml/kicost_config_local.yaml)."
     echo -e "  --log-dir DIR               Store the KiBot logs in DIR."
     echo -e "  --skip-checks               Don't run the manufacturing checks after the generation."
+    echo -e "  --no-variants               Don't generate the assembly_variants of $settings_file after"
+    echo -e "                              a CHECKED / RELEASED run."
     echo -e "  --stackup NAME|list         Apply a stackup profile of kibot_resources/stackups to the PCB"
     echo -e "                              (copper layers, stackup, design rules, impedance net classes,"
     echo -e "                              zones refilled)."
@@ -81,7 +84,7 @@ function display_help() {
     echo -e "  ./kibot_launch.sh -v DRAFT               Schematic PDF, netlist and BoM only."
     echo -e "  ./kibot_launch.sh -v CHECKED -r blender  All outputs, ERC/DRC, Blender renders."
     echo -e "  ./kibot_launch.sh --costs                XLSX costs spreadsheet in Manufacturing/Assembly."
-    echo -e "  ./kibot_launch.sh -v EXAMPLE             Assembly variant, outputs in Variants/."
+    echo -e "  ./kibot_launch.sh -v LITE                Assembly variant (KiCad 10 variant), outputs in Variants/LITE."
     echo -e "  ./kibot_launch.sh --server 8080          Browse the outputs on http://localhost:8080."
     echo -e "  ./kibot_launch.sh --stackup jlcpcb_2l    Switch to the JLCPCB 2 layers stackup, rules and net classes."
     echo -e "  ./kibot_launch.sh --stackup makera_z1_2l CNC milled board (Makera Z1): unplated 2 layers, milling rules."
@@ -91,7 +94,7 @@ function display_help() {
     echo -e "  PRELIMINARY: generates both schematic and PCB documents, but no ERC/DRC"
     echo -e "  CHECKED:     generates both schematic and PCB documents, with ERC/DRC"
     echo -e "  RELEASED:    similar to CHECKED, used for releases (automatic on tags in CI)"
-    echo -e "  Other:       assembly variants, run like RELEASED, outputs saved in Variants/"
+    echo -e "  Other:       assembly variants, run like RELEASED, outputs saved in Variants/<name>"
     exit 0
 }
 
@@ -118,6 +121,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-checks)
             check_flag=false
+            ;;
+        --no-variants)
+            variants_flag=false
             ;;
         --costs)
             costs_flag=true
@@ -256,18 +262,33 @@ if [[ -z "$revision" ]]; then
     fi
 fi
 
-# Output directory: assembly variants go in the Variants folder
+# Output directory: each assembly variant in its own Variants/<name> folder
 case "$variant" in
     DRAFT|PRELIMINARY|CHECKED|RELEASED) output_dir="." ;;
-    *) output_dir="Variants" ;;
+    *) output_dir="Variants/$variant" ;;
 esac
 
 # Common KiBot arguments. --dont-stop: a failing output doesn't prevent the
 # generation of the others, --fail-on-ignored: but we still return an error.
 common_args=(-c "$kibot_config" -d "$output_dir" -g "variant=$variant" -E "REVISION=$revision"
-             --dont-stop --fail-on-ignored)
+             -E "OUTPUT_ROOT=$output_dir" --dont-stop --fail-on-ignored)
 if [[ -n "$render_engine" ]]; then
     common_args+=(-E "RENDER_ENGINE=$render_engine")
+fi
+# Assembly variant (KiCad 10 variant of the project): declared through
+# definitions in kibot_main.yaml, with the description of the project
+if [[ "$output_dir" != . ]]; then
+    variant_comment="$(python3 - "$variant" <<'PYEOF' 2>/dev/null
+import glob, json, re, sys
+for pro in glob.glob('*.kicad_pro'):
+    if re.match(r'kibot_.{8}[.]kicad_pro$', pro):
+        continue
+    for v in json.load(open(pro, encoding='utf-8')).get('schematic', {}).get('variants', []):
+        if v.get('name') == sys.argv[1]:
+            print((v.get('description') or '').replace("'", ' '))
+PYEOF
+)"
+    common_args+=(-E "ASSEMBLY_VARIANT=$variant" -E "ASSEMBLY_VARIANT_COMMENT=${variant_comment:-$variant}")
 fi
 # GIT_URL: auto -> URL of the git remote (https, without credentials)
 if grep -qE "^  GIT_URL:[[:space:]]*['\"]?auto['\"]?[[:space:]]*(#.*)?$" "$kibot_config"; then
@@ -352,9 +373,14 @@ else
             run_kibot notes --skip-pre all notes
             run_kibot outputs --skip-pre erc,drc all_group
             ;;
-        CHECKED|RELEASED|*)
+        CHECKED|RELEASED)
             run_kibot notes --skip-pre all notes
             run_kibot outputs all_group
+            ;;
+        *)
+            # Assembly variant
+            run_kibot notes --skip-pre all notes
+            run_kibot outputs variant_group
             ;;
     esac
 fi
@@ -365,6 +391,9 @@ if [[ "$costs_flag" != true && "$check_flag" == true ]]; then
     if [[ -n "$log_dir" ]]; then
         check_args+=(--markdown "$(pwd)/$log_dir/manufacturing_checks.md")
     fi
+    if [[ "$output_dir" != . ]]; then
+        check_args+=(--title "Manufacturing checks: variant $variant")
+    fi
     echo -e "${GREEN}Running: manufacturing checks${NC}"
     python3 kibot_resources/scripts/check_manufacturing.py "${check_args[@]}"
     ret=$?
@@ -372,6 +401,24 @@ if [[ "$costs_flag" != true && "$check_flag" == true ]]; then
         echo -e "${RED}Manufacturing checks failed${NC}"
         failed=$ret
     fi
+fi
+
+# Assembly variants of kibot_settings.yaml, after a CHECKED / RELEASED run:
+# one run per variant (outputs in Variants/<name>, logs in <log dir>/<name>)
+if [[ "$costs_flag" != true && "$variants_flag" == true && ( "$variant" == CHECKED || "$variant" == RELEASED ) ]]; then
+    assembly_variants="$(get_setting assembly_variants)"
+    for av in ${assembly_variants//,/ }; do
+        echo -e "${GREEN}Assembly variant: $av${NC}"
+        sub_args=(-v "$av")
+        [[ -n "$revision" ]] && sub_args+=(--version "$revision")
+        [[ -n "$render_engine" ]] && sub_args+=(-r "$render_engine")
+        [[ "$check_flag" != true ]] && sub_args+=(--skip-checks)
+        [[ -n "$log_dir" ]] && sub_args+=(--log-dir "$log_dir/$av")
+        if ! bash "$0" "${sub_args[@]}"; then
+            echo -e "${RED}Assembly variant $av failed${NC}"
+            failed=1
+        fi
+    done
 fi
 
 # Remove the temporary project copies KiBot may leave behind

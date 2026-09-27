@@ -69,13 +69,13 @@ preflight:
     # Fabrication notes
     - variable: 'FABRICATION_NOTES'
       expand_in_command: true
-      command: '[ -f "@FABRICATION_DIR@/%f-fabrication_notes%v.txt" ] && cat "@FABRICATION_DIR@/%f-fabrication_notes%v.txt" || echo ""'
+      command: '[ -f "@OUTPUT_ROOT@/@FABRICATION_DIR@/%f-fabrication_notes%v.txt" ] && cat "@OUTPUT_ROOT@/@FABRICATION_DIR@/%f-fabrication_notes%v.txt" || echo ""'
 
 
     # Fabrication notes
     - variable: 'ASSEMBLY_NOTES'
       expand_in_command: true
-      command: '[ -f "@ASSEMBLY_DIR@/%f-assembly_notes%v.txt" ] && cat "@ASSEMBLY_DIR@/%f-assembly_notes%v.txt" || echo ""'
+      command: '[ -f "@OUTPUT_ROOT@/@ASSEMBLY_DIR@/%f-assembly_notes%v.txt" ] && cat "@OUTPUT_ROOT@/@ASSEMBLY_DIR@/%f-assembly_notes%v.txt" || echo ""'
 
     # Page titles for automatic ToC
     - variable: '@SHEET_NAME_VAR@1'
@@ -178,3 +178,4 @@ definitions:
   GET_BODY_CMD: python3 @SCRIPTS_DIR@/get_changelog.py -f CHANGELOG.md --extra-spaces --separators 35 --version
   FABRICATION_DIR: Manufacturing/Fabrication
   ASSEMBLY_DIR: Manufacturing/Assembly
+  OUTPUT_ROOT: .

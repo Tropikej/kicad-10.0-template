@@ -25,6 +25,7 @@ definitions.
   - [Ordering at JLCPCB](#ordering-at-jlcpcb)
   - [3D renders: KiCad or Blender](#3d-renders-kicad-or-blender)
   - [Shared libraries](#shared-libraries-symbols-footprints-3d-models)
+  - [Assembly variants (KiCad 10)](#assembly-variants-kicad-10)
 - [Running locally (Docker)](#running-locally-docker)
 - [CI/CD on GitHub Actions](#cicd-on-github-actions)
   - [Dependency updates (Renovate)](#dependency-updates-renovate)
@@ -536,6 +537,37 @@ self-contained, at the cost of a bigger `.kicad_pcb`.
 
 When a model can't be found, the render is generated without it and KiBot
 reports `Missing 3D model for <ref>` (W047) and an error.
+### Assembly variants (KiCad 10)
+
+One schematic, several builds (i.e. a `LITE` version without some parts, or
+with other values). The template uses the **native KiCad 10 variants**:
+
+1. *File → Schematic Setup → Variants*: add the variant (name and
+   description).
+2. *Tools → Edit Symbol Fields*: per variant, mark the parts not fitted (DNP)
+   or change their fields. **When you change a value, also change `LCSC`,
+   `Manufacturer Part Number`...**, or the factory fits the original part: the
+   manufacturing checks warn when one LCSC code is used for different values.
+3. *Tools → Update PCB from Schematic*.
+4. List the variants in `kibot_settings.yaml`:
+
+   ```yaml
+   assembly_variants: LITE
+   ```
+
+After each CHECKED / RELEASED run (local or CI), each variant is generated in
+`Variants/<name>`, with the `_<name>` suffix: BoMs, pick and place, iBoM,
+assembly PDF, schematic PDF (DNP parts marked), 3D renders and STEP, JLCPCB
+order files. The Gerbers, fabrication documents and KiRI are the ones of the
+main run (same PCB). The releases attach the schematic, assembly files and
+JLCPCB ZIP of each variant; the pull request comment shows the manufacturing
+checks of each variant.
+
+Run a single variant with `./run_kibot.sh -v LITE`, skip them with
+`--no-variants`. KiBot needs the variant selected on the command line to be
+declared in its configuration: `kibot_main.yaml` declares one generic `kicad`
+variant named by the `ASSEMBLY_VARIANT` definition, set by the launcher.
+
 ## RUNNING LOCALLY (DOCKER)
 
 Install and start [Docker Desktop](https://docs.docker.com/desktop/) (or the

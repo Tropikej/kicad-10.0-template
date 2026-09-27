@@ -34,6 +34,7 @@ class Report(object):
         self.lines = []
         self.errors = 0
         self.warnings = 0
+        self.title = 'Manufacturing checks'
 
     def section(self, title):
         self.lines.append(('section', title))
@@ -62,7 +63,7 @@ class Report(object):
 
     def markdown(self):
         icons = {'ok': '✅', 'info': 'ℹ️', 'warn': '⚠️', 'error': '❌'}
-        out = ['### Manufacturing checks ({} error(s), {} warning(s))'.format(self.errors, self.warnings), '']
+        out = ['### {} ({} error(s), {} warning(s))'.format(self.title, self.errors, self.warnings), '']
         for kind, msg in self.lines:
             if kind == 'section':
                 out += ['', '**{}**'.format(msg), '']
@@ -419,7 +420,10 @@ def split_refs(text):
 
 
 def check_assembly(rep, jlc_copper):
+    # Main run: NAME-bom.csv, assembly variant: NAME-bom_VARIANT.csv
     bom_file, bom = read_csv('Manufacturing/Assembly/*-bom.csv')
+    if bom is None:
+        bom_file, bom = read_csv('Manufacturing/Assembly/*-bom_*.csv')
     fitted = {}
     if bom is not None:
         for row in bom:
@@ -432,14 +436,21 @@ def check_assembly(rep, jlc_copper):
         rep.info('no JLCPCB assembly files')
         return
     jbom_refs = {}
+    values_by_code = {}
     for row in jbom or []:
         code = (row.get('LCSC Part #') or '').strip()
+        values_by_code.setdefault(code, []).append('`{}` ({})'.format(row.get('Comment'), row.get('Designator')))
         for ref in split_refs(row.get('Designator')):
             if ref in jbom_refs:
                 rep.error('JLCPCB BoM: {} is on several lines'.format(ref))
             jbom_refs[ref] = code
         if not re.match(r'^C\d+$', code):
             rep.error('JLCPCB BoM: invalid LCSC code `{}` for {}'.format(code, row.get('Designator')))
+    # i.e. a variant overriding the value but not the LCSC field: the factory fits the same part
+    for code, values in sorted(values_by_code.items()):
+        if code and len(values) > 1:
+            rep.warn('JLCPCB BoM: {} is used for different values: {}. Override the LCSC field with the value.'.format(
+                code, ', '.join(values)))
     cpl_refs = [row['Designator'] for row in jcpl or []]
     if fitted:
         unknown = sorted(set(jbom_refs) - set(fitted))
@@ -542,11 +553,16 @@ def main():
     parser = argparse.ArgumentParser(description='Sanity checks of the manufacturing files')
     parser.add_argument('-d', '--dir', default='.', help='Project/output directory')
     parser.add_argument('--markdown', help='Also write the report in Markdown to this file')
+    parser.add_argument('--title', default='Manufacturing checks', help='Title of the Markdown report')
     args = parser.parse_args()
     global PROJECT_DIR
     PROJECT_DIR = os.getcwd()
+    if not os.path.isdir(args.dir):
+        print('ERROR: output directory {} not found (generation failed?)'.format(args.dir))
+        return 1
     os.chdir(args.dir)
     rep = Report()
+    rep.title = args.title
 
     sets = []
     if glob.glob('Manufacturing/Fabrication/Gerbers/*'):

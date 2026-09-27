@@ -186,10 +186,14 @@ jobs:
               commit) link_base="${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}" ;;
             esac
           fi
+          # Main run and assembly variants (logs in $KIBOT_LOGS/<variant>)
+          appends=(--append "$KIBOT_LOGS/manufacturing_checks.md")
+          for f in "$KIBOT_LOGS"/*/manufacturing_checks.md; do
+            [[ -f "$f" ]] && appends+=(--append "$f")
+          done
           python3 kibot_resources/scripts/ci_summary.py --variant "$VARIANT" --status "$STATUS" \
             --revision "$REVISION" --engine "$ENGINE" --link-base "$link_base" \
-            --artifacts-url "$RUN_URL" --append "$KIBOT_LOGS/manufacturing_checks.md" \
-            -o "$RUNNER_TEMP/summary.md"
+            --artifacts-url "$RUN_URL" "${appends[@]}" -o "$RUNNER_TEMP/summary.md"
           cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment the pull request
@@ -298,3 +302,6 @@ jobs:
             3D/*.step
             Images/*.png
             Testing/Testpoints/*.csv
+            Variants/*/Schematic/*.pdf
+            Variants/*/Manufacturing/Assembly/*
+            Variants/*/Manufacturing/JLCPCB/*.zip
