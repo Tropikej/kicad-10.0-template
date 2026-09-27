@@ -245,7 +245,8 @@ def segment_distance(px, py, a, b):
 
 
 def outline_polygons(g):
-    """ Chains the outline draws into closed polygons. Returns (polygons, open_ends) """
+    """ Chains the outline draws into closed polygons. Returns (polygons, open_ends, vcuts).
+        V-cuts (JLCPCB: on the outline layer) are isolated horizontal/vertical lines """
     def key(p):
         return (round(p[0], 3), round(p[1], 3))
     segs = [pts for pts, _ in g.draws if len(pts) >= 2]
@@ -253,6 +254,14 @@ def outline_polygons(g):
     for idx, pts in enumerate(segs):
         for k in (key(pts[0]), key(pts[-1])):
             ends.setdefault(k, []).append(idx)
+    vcuts = [pts for pts in segs if len(pts) == 2 and len(ends[key(pts[0])]) == 1 and len(ends[key(pts[1])]) == 1 and
+             (abs(pts[0][0] - pts[1][0]) < 1e-3 or abs(pts[0][1] - pts[1][1]) < 1e-3)]
+    if vcuts:
+        segs = [pts for pts in segs if not any(pts is v for v in vcuts)]
+        ends = {}
+        for idx, pts in enumerate(segs):
+            for k in (key(pts[0]), key(pts[-1])):
+                ends.setdefault(k, []).append(idx)
     open_ends = [k for k, v in ends.items() if len(v) % 2]
     used = set()
     polys = []
@@ -271,7 +280,7 @@ def outline_polygons(g):
             pts = segs[i] if key(segs[i][0]) == last else list(reversed(segs[i]))
             poly.extend(pts[1:])
         polys.append(poly)
-    return polys, open_ends
+    return polys, open_ends, vcuts
 
 
 def polygon_area(poly):
@@ -358,7 +367,7 @@ def check_gerber_set(rep, source):
     if len(outline) != 1:
         rep.error('{} board outline (Profile) files'.format(len(outline)))
     else:
-        polys, open_ends = outline_polygons(outline[0])
+        polys, open_ends, vcuts = outline_polygons(outline[0])
         if open_ends:
             rep.error('board outline not closed ({} open ends, i.e. at {})'.format(len(open_ends), open_ends[0]))
         elif not polys:
@@ -368,9 +377,10 @@ def check_gerber_set(rep, source):
             board = polys
             xs = [p[0] for p in polys[0]]
             ys = [p[1] for p in polys[0]]
-            rep.ok('board outline closed: {:.2f} x {:.2f} mm{}'.format(
+            rep.ok('board outline closed: {:.2f} x {:.2f} mm{}{}'.format(
                 max(xs) - min(xs), max(ys) - min(ys),
-                ', {} cut-out(s)'.format(len(polys) - 1) if len(polys) > 1 else ''))
+                ', {} cut-out(s)'.format(len(polys) - 1) if len(polys) > 1 else '',
+                ', {} V-cut line(s)'.format(len(vcuts)) if vcuts else ''))
 
     def on_board(x, y):
         return point_in_polygon(x, y, board[0]) and not any(point_in_polygon(x, y, p) for p in board[1:])
@@ -568,6 +578,8 @@ def main():
     if glob.glob('Manufacturing/Fabrication/Gerbers/*'):
         sets.append('Manufacturing/Fabrication/Gerbers')
     sets += sorted(glob.glob('Manufacturing/JLCPCB/*.zip'))
+    if glob.glob('Manufacturing/Panel/Gerbers/*'):
+        sets.append('Manufacturing/Panel/Gerbers')
     jlc_copper = None
     for s in sets:
         rep.section('Gerbers and drill: ' + s)

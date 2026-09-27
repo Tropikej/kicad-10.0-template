@@ -86,6 +86,11 @@ groups:
       - @PDF_SCHEMATIC_OUTPUT@
       - jlcpcb
 
+  # Panel (kibot_launch.sh, `panel: true` in kibot_settings.yaml)
+  - name: panel_group
+    outputs:
+      - panel
+
   # Generated for DRAFT
   - name: draft_group
     outputs:
@@ -252,6 +257,21 @@ import:
       _KIBOT_COMPRESS_MOVE: true
       _KIBOT_DRILL_AUX_ORIGIN: false
       _KIBOT_PLOT_FOOTPRINT_REFS: @PLOT_REFS@
+
+  # Panel (KiKit), when `panel: true` in kibot_settings.yaml. The launcher
+  # then plots it with kibot_panel.yaml (Gerbers, drill, ZIP)
+  - file: kibot_out_panelize_@PANEL_CUTS@.yaml
+    definitions:
+      NAME: panel
+      COMMENT: Panel for JLCPCB (@PANEL_CUTS@)
+      DIR: '@PANEL_DIR@'
+      PANEL_ROWS: @PANEL_ROWS@
+      PANEL_COLS: @PANEL_COLS@
+      PANEL_SPACE: @PANEL_SPACE@
+      PANEL_TAB_WIDTH: @PANEL_TAB_WIDTH@
+      PANEL_TAB_COUNT: @PANEL_TAB_COUNT@
+      PANEL_RAIL_WIDTH: @PANEL_RAIL_WIDTH@
+      PANEL_MIN_SIZE: @PANEL_MIN_SIZE@
 
   # Netlist --------------------------------------------------------------------
   - file: kibot_out_netlist.yaml
@@ -660,9 +680,11 @@ definitions:
   # back from it (Variants/<name> for the assembly variants)
   OUTPUT_ROOT: .
 
-  # Assembly variant (set by kibot_launch.sh -v NAME, see `variants:`)
-  ASSEMBLY_VARIANT: Default
-  ASSEMBLY_VARIANT_COMMENT: Default KiCad variant
+  # Assembly variant (set by kibot_launch.sh -v NAME, see `variants:`).
+  # Placeholder otherwise: not `Default`, KiBot uses the `Default` KiCad
+  # variant for the outputs without variant.
+  ASSEMBLY_VARIANT: NO_ASSEMBLY_VARIANT
+  ASSEMBLY_VARIANT_COMMENT: Unused
 
   # 3D renders =================================================================
 
@@ -695,6 +717,20 @@ definitions:
   # (also available: JLCPCB_stencil, JLCPCB_stencil_with_THT)
   JLCPCB_TEMPLATE: JLCPCB
 
+  # Panel (KiKit) ==============================================================
+  # Generated when `panel: true` in kibot_settings.yaml, in PANEL_DIR:
+  # panel PCB, preview, Gerbers + drill ZIP to order it at JLCPCB (panel by
+  # customer). Rails top/bottom with tooling holes and fiducials, board title
+  # and revision on the top rail.
+  PANEL_CUTS: mousebites     # mousebites (any shape) | vcuts (rectangles only)
+  PANEL_ROWS: 2
+  PANEL_COLS: 2
+  PANEL_SPACE: 2             # mm between boards (mousebites only)
+  PANEL_TAB_WIDTH: 3         # mm (mousebites only)
+  PANEL_TAB_COUNT: 2         # tabs per board edge (mousebites only)
+  PANEL_RAIL_WIDTH: 5        # mm, JLCPCB assembly needs >= 5
+  PANEL_MIN_SIZE: 70         # mm, JLCPCB Standard PCBA minimum (0: none)
+
   # KiRI (visual diff between commits) =========================================
 
   KIRI_MAX_COMMITS: 5
@@ -713,6 +749,7 @@ definitions:
   FABRICATION_DIR: '@MANUFACTURING_DIR@/Fabrication'
   GERBERS_DIR: '@FABRICATION_DIR@/Gerbers'
   JLCPCB_DIR: '@MANUFACTURING_DIR@/JLCPCB'
+  PANEL_DIR: '@MANUFACTURING_DIR@/Panel'
   FAB_DRILL_TABLES_DIR: '@FABRICATION_DIR@/Drill Tables'
   TESTING_DIR: Testing
   TESTPOINTS_DIR: '@TESTING_DIR@/Testpoints'

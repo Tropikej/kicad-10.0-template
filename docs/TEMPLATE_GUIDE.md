@@ -23,6 +23,7 @@ definitions.
   - [CNC milling (Makera Z1)](#cnc-milling-makera-z1)
   - [Manufacturing checks](#manufacturing-checks)
   - [Ordering at JLCPCB](#ordering-at-jlcpcb)
+  - [Panel (KiKit)](#panel-kikit)
   - [3D renders: KiCad or Blender](#3d-renders-kicad-or-blender)
   - [Shared libraries](#shared-libraries-symbols-footprints-3d-models)
   - [Assembly variants (KiCad 10)](#assembly-variants-kicad-10)
@@ -420,6 +421,37 @@ template of KiBot:
 - `JLCPCB_TEMPLATE` in `kibot_main.yaml` selects the assembly type: `JLCPCB`
   (SMD only, default) or `JLCPCB_with_THT` (SMD and through hole), and
   `JLCPCB_stencil` / `JLCPCB_stencil_with_THT` to add the paste layers.
+
+### Panel (KiKit)
+
+Small boards are cheaper and assembled faster in a panel. With `panel: true`
+in `kibot_settings.yaml`, the PRELIMINARY / CHECKED / RELEASED runs make one
+with [KiKit](https://yaqwsx.github.io/KiKit/) in `Manufacturing/Panel`:
+
+| File | Use |
+| --- | --- |
+| `<name>-panel.png` | Preview |
+| `<name>-panel-GERBERS.zip` | Gerbers + drill of the panel: upload it as the PCB ("panel by customer") |
+| `<name>-panel.kicad_pcb` | The panel, to open in KiCad |
+| `Gerbers/` | The panel Gerbers, also checked by the manufacturing checks |
+
+The layout is set by the `PANEL_*` definitions of `kibot_main.yaml`:
+
+| Definition | Default | |
+| --- | --- | --- |
+| `PANEL_CUTS` | `mousebites` | `mousebites`: tabs with 0.5 mm holes, any board shape. `vcuts`: boards touching, V-cut lines on Edge.Cuts; rectangular boards **with sharp corners** only (rounded corners leave open outline pieces, reported by the checks) |
+| `PANEL_ROWS`, `PANEL_COLS` | 2, 2 | Boards in the panel |
+| `PANEL_SPACE`, `PANEL_TAB_WIDTH`, `PANEL_TAB_COUNT` | 2 mm, 3 mm, 2 | Mouse bites: routed gap, tab width, tabs per board edge |
+| `PANEL_RAIL_WIDTH` | 5 mm | Top/bottom rails, with 3 tooling holes (1.152 mm, JLCPCB) and 3 fiducials |
+| `PANEL_MIN_SIZE` | 70 mm | The rails grow to reach it (JLCPCB Standard PCBA minimum), 0 for none |
+
+The top rail shows `${BOARD_NAME} rev ${REVISION}`. For more options (other
+frames, texts, copper fill of the rails...), edit
+`kibot_yaml/kibot_out_panelize_<cuts>.yaml`
+([KiKit options](https://yaqwsx.github.io/KiKit/latest/panelization/cli/)).
+The assembly files (BoM, pick and place) stay the ones of the single board:
+JLCPCB asks for unique designators on a panel, so order the assembly of a
+panel from the single-board files with "Panel by JLCPCB", or adapt the files.
 
 ### 3D renders: KiCad or Blender
 

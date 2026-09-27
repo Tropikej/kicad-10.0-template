@@ -302,6 +302,8 @@ jobs:
             3D/*.step
             Images/*.png
             Testing/Testpoints/*.csv
+            Manufacturing/Panel/*.zip
+            Manufacturing/Panel/*.png
             Variants/*/Schematic/*.pdf
             Variants/*/Manufacturing/Assembly/*
             Variants/*/Manufacturing/JLCPCB/*.zip

@@ -385,6 +385,31 @@ else
     esac
 fi
 
+# Panel (KiKit): the panel PCB, then its Gerbers / drill with kibot_panel.yaml
+# (a separate configuration: the panel is another board, without variants)
+if [[ "$costs_flag" != true && "$(get_setting panel)" == true ]]; then
+    case "$variant" in
+        PRELIMINARY|CHECKED|RELEASED)
+            rm -rf "$output_dir/Manufacturing/Panel"
+            if run_kibot panel --skip-pre all panel_group; then
+                panel_pcb="$(find "$output_dir" -name '*-panel.kicad_pcb' -not -path '*/Variants/*' | head -n1)"
+                if [[ -n "$panel_pcb" ]]; then
+                    cmd=(kibot -c kibot_yaml/kibot_panel.yaml -b "$panel_pcb" -e "" -d "$output_dir" --dont-stop)
+                    [[ -n "$log_dir" ]] && cmd=(kibot --log "$log_dir/kibot_panel_files.log" "${cmd[@]:1}")
+                    echo -e "${GREEN}Running: ${cmd[*]}${NC}"
+                    if ! "${cmd[@]}"; then
+                        echo -e "${RED}KiBot step 'panel_files' failed${NC}"
+                        failed=1
+                    fi
+                else
+                    echo -e "${RED}Panel PCB not found${NC}"
+                    failed=1
+                fi
+            fi
+            ;;
+    esac
+fi
+
 # Manufacturing checks: Gerbers/drill, assembly files, PDF documents
 if [[ "$costs_flag" != true && "$check_flag" == true ]]; then
     check_args=(-d "$output_dir")
