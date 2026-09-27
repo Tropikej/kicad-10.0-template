@@ -84,6 +84,7 @@ function display_help() {
     echo -e "  ./kibot_launch.sh -v EXAMPLE             Assembly variant, outputs in Variants/."
     echo -e "  ./kibot_launch.sh --server 8080          Browse the outputs on http://localhost:8080."
     echo -e "  ./kibot_launch.sh --stackup jlcpcb_2l    Switch to the JLCPCB 2 layers stackup, rules and net classes."
+    echo -e "  ./kibot_launch.sh --stackup makera_z1_2l CNC milled board (Makera Z1): unplated 2 layers, milling rules."
     echo
     echo -e "VARIANT DESCRIPTIONS"
     echo -e "  DRAFT:       only schematic in progress, generates schematic PDF, netlist and BoM"

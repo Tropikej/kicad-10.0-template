@@ -5,8 +5,9 @@ project:
 - PCB: number of copper layers, copper layer names/types and physical stackup
   (thicknesses, materials, dielectric constants, finish, colors)
 - zones refilled with the new rules (KiCad Python API, when available)
-- project: impedance net classes, Board Setup minimums, via sizes, design
-  rules file (.kicad_dru, only if not customized)
+- project: net classes (impedance, or raised to the profile minimums), Board
+  Setup minimums, via sizes, design rules file (.kicad_dru) and fabrication
+  notes (both only if not customized)
 - impedance table of the fabrication document
 
 The KiCad Python API doesn't expose the stackup, so the .kicad_pcb file is
@@ -31,7 +32,20 @@ NETCLASS_FIELDS = ('track_width', 'clearance', 'diff_pair_width', 'diff_pair_gap
                    'via_drill')
 
 
-def update_project(pro_file, profile, profiles_dir):
+def install_file(dst, profiles_dir, name, pattern, label):
+    """ Copies a profile file (design rules, fabrication notes) to the project, unless the project one was
+        customized (differs from all the profiles files matching the pattern) """
+    src = os.path.join(profiles_dir, name)
+    known = glob.glob(os.path.join(profiles_dir, pattern))
+    if not os.path.isfile(dst) or any(filecmp.cmp(dst, k, shallow=False) for k in known):
+        shutil.copyfile(src, dst)
+        return '{}: {} ({})'.format(label, name, dst)
+    if not filecmp.cmp(dst, src, shallow=False):
+        return 'WARNING: {} was customized, kept it. Compare it with {}'.format(os.path.basename(dst), src)
+    return None
+
+
+def update_project(pro_file, profile, profiles_dir, fab_notes=None):
     """ Net classes, Board Setup rules and via sizes of the .kicad_pro """
     with open(pro_file, encoding='utf-8') as f:
         pro = json.load(f)
@@ -56,6 +70,19 @@ def update_project(pro_file, profile, profiles_dir):
         msgs.append('net class {} {} (width {} mm{})'.format(
             nc['name'], action, nc.get('track_width'),
             ', gap {} mm'.format(nc['diff_pair_gap']) if 'diff_pair_gap' in nc else ''))
+    # Other net classes raised to the process minimums (i.e. CNC milling)
+    mins = profile.get('netclass_minimums', {})
+    own = {nc['name'] for nc in profile.get('netclasses', [])}
+    for c in classes:
+        if c.get('name') in own:
+            continue
+        raised = []
+        for k, v in mins.items():
+            if isinstance(c.get(k), (int, float)) and c[k] < v:
+                raised.append('{} {}->{}'.format(k, c[k], v))
+                c[k] = v
+        if raised:
+            msgs.append('net class {} raised to the minimums: {}'.format(c.get('name'), ', '.join(raised)))
     ds = pro.setdefault('board', {}).setdefault('design_settings', {})
     if profile.get('board_rules'):
         ds.setdefault('rules', {}).update(profile['board_rules'])
@@ -67,19 +94,14 @@ def update_project(pro_file, profile, profiles_dir):
     with open(pro_file, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(pro, f, indent=2, ensure_ascii=False)
         f.write('\n')
-    # Design rules: replace the project rules only if they are one of the profiles files (not customized)
-    rules = profile.get('design_rules')
-    if rules:
-        src = os.path.join(profiles_dir, rules)
-        dru = pro_file[:-len('.kicad_pro')] + '.kicad_dru'
-        known = [os.path.join(profiles_dir, f) for f in os.listdir(profiles_dir) if f.endswith('.kicad_dru')]
-        if not os.path.isfile(dru) or any(filecmp.cmp(dru, k, shallow=False) for k in known):
-            shutil.copyfile(src, dru)
-            msgs.append('design rules: {}'.format(rules))
-        elif not filecmp.cmp(dru, src, shallow=False):
-            msgs.append('WARNING: {} was customized, kept it. Compare it with {}'.format(
-                os.path.basename(dru), src))
-    return msgs
+    # Design rules and fabrication notes: replaced only if they are one of the profiles files (not customized)
+    if profile.get('design_rules'):
+        msgs.append(install_file(pro_file[:-len('.kicad_pro')] + '.kicad_dru', profiles_dir, profile['design_rules'],
+                                 '*.kicad_dru', 'design rules'))
+    if profile.get('fabrication_notes') and fab_notes:
+        msgs.append(install_file(fab_notes, profiles_dir, profile['fabrication_notes'], 'fabrication_notes_*.txt',
+                                 'fabrication notes'))
+    return [m for m in msgs if m]
 
 COPPER_RE = re.compile(r'^(F|B|In\d+)\.Cu$')
 
@@ -160,10 +182,15 @@ def build_stackup(profile, names, dielectric_constraints):
 
     mask = [('thickness', fmt(profile.get('mask_thickness', 0.01))), ('material', '"Solder Resist"'),
             ('epsilon_r', fmt(profile.get('mask_epsilon_r', 3.8))), ('loss_tangent', '0')]
-    layer('F.SilkS', [('type', '"Top Silk Screen"'), ('color', '"{}"'.format(profile.get('silk_color', 'White'))),
-                      ('material', '"Direct Printing"')])
+    silk = profile.get('silkscreen', True)
+    has_mask = profile.get('solder_mask', True)
+    if silk:
+        layer('F.SilkS', [('type', '"Top Silk Screen"'), ('color', '"{}"'.format(profile.get('silk_color', 'White'))),
+                          ('material', '"Direct Printing"')])
     layer('F.Paste', [('type', '"Top Solder Paste"')])
-    layer('F.Mask', [('type', '"Top Solder Mask"'), ('color', '"{}"'.format(profile.get('mask_color', 'Green')))] + mask)
+    if has_mask:
+        layer('F.Mask', [('type', '"Top Solder Mask"'), ('color', '"{}"'.format(profile.get('mask_color', 'Green')))] +
+              mask)
     cu_index = 0
     diel_index = 0
     for item in profile['layers']:
@@ -176,10 +203,13 @@ def build_stackup(profile, names, dielectric_constraints):
                   [('type', '"{}"'.format(item.get('dielectric', 'core'))), ('color', '"FR4 natural"'),
                    ('thickness', fmt(item['thickness'])), ('material', '"{}"'.format(item.get('material', 'FR4'))),
                    ('epsilon_r', fmt(item.get('epsilon_r', 4.5))), ('loss_tangent', fmt(item.get('loss_tangent', 0.02)))])
-    layer('B.Mask', [('type', '"Bottom Solder Mask"'), ('color', '"{}"'.format(profile.get('mask_color', 'Green')))] + mask)
+    if has_mask:
+        layer('B.Mask', [('type', '"Bottom Solder Mask"'), ('color', '"{}"'.format(profile.get('mask_color', 'Green')))] +
+              mask)
     layer('B.Paste', [('type', '"Bottom Solder Paste"')])
-    layer('B.SilkS', [('type', '"Bottom Silk Screen"'), ('color', '"{}"'.format(profile.get('silk_color', 'White'))),
-                      ('material', '"Direct Printing"')])
+    if silk:
+        layer('B.SilkS', [('type', '"Bottom Silk Screen"'), ('color', '"{}"'.format(profile.get('silk_color', 'White'))),
+                          ('material', '"Direct Printing"')])
     out.append(t + '(copper_finish "{}")'.format(profile.get('copper_finish', 'HAL lead-free')))
     out.append(t + '(dielectric_constraints {})'.format(dielectric_constraints))
     out.append('\t\t)')
@@ -203,6 +233,8 @@ def main():
     parser.add_argument('--force', action='store_true', help='Remove copper layers even if they are used')
     parser.add_argument('--list', action='store_true', help='List the available profiles')
     parser.add_argument('--no-fill', action='store_true', help="Don't refill the zones")
+    parser.add_argument('--fab-notes', default='kibot_resources/templates/fabrication_notes.txt',
+                        help='Fabrication notes replaced by the profile ones (`fabrication_notes` entry)')
     parser.add_argument('--impedance-table', default='kibot_resources/templates/impedance_table.txt',
                         help='Impedance table written from the profile (`impedance` entry)')
     args = parser.parse_args()
@@ -258,7 +290,9 @@ def main():
     text = text[:stackup_pos[0]] + new_stackup + text[stackup_pos[1]:]
     text = text[:layers_pos[0]] + new_layers + text[layers_pos[1]:]
 
-    thickness = sum(float(la['thickness']) for la in profile['layers']) + 2 * float(profile.get('mask_thickness', 0.01))
+    thickness = sum(float(la['thickness']) for la in profile['layers'])
+    if profile.get('solder_mask', True):
+        thickness += 2 * float(profile.get('mask_thickness', 0.01))
     text = re.sub(r'(\n\t\(general\n\t\t\(thickness )[\d.]+\)', r'\g<1>{})'.format(fmt(round(thickness, 4))), text, count=1)
 
     with open(board, 'w', encoding='utf-8', newline='\n') as f:
@@ -268,9 +302,11 @@ def main():
 
     # Impedance table of the fabrication document
     rows = profile.get('impedance')
-    if rows:
+    if rows is not None:
         lines = ['Transmission Line, Impedance [ohms], Tolerance, Layer, Trace Width [mm], Gap [mm], Gap to GND [mm], '
                  'Ref. Layers']
+        if not rows:
+            lines.append('No controlled impedance, -, -, -, -, -, -, -')
         for r in rows:
             lines.append(', '.join(str(r.get(k, '-')) for k in ('line', 'impedance', 'tolerance', 'layer', 'width',
                                                                  'gap', 'gnd_gap', 'ref')))
@@ -281,7 +317,7 @@ def main():
     # Project: net classes, Board Setup rules, via sizes, design rules
     pro_file = board[:-len('.kicad_pcb')] + '.kicad_pro'
     if os.path.isfile(pro_file):
-        for msg in update_project(pro_file, profile, os.path.dirname(os.path.abspath(profile_file))):
+        for msg in update_project(pro_file, profile, os.path.dirname(os.path.abspath(profile_file)), args.fab_notes):
             print('{}: {}'.format(pro_file, msg))
 
     # After the project update, so the fills use the new clearances

@@ -20,6 +20,7 @@ definitions.
   - [Pipeline settings: `kibot_settings.yaml`](#pipeline-settings-kibot_settingsyaml)
   - [KiBot parameters: `kibot_yaml/kibot_main.yaml`](#kibot-parameters-kibot_yamlkibot_mainyaml)
   - [Stackup and design rules (JLCPCB)](#stackup-and-design-rules-jlcpcb)
+  - [CNC milling (Makera Z1)](#cnc-milling-makera-z1)
   - [Manufacturing checks](#manufacturing-checks)
   - [Ordering at JLCPCB](#ordering-at-jlcpcb)
   - [3D renders: KiCad or Blender](#3d-renders-kicad-or-blender)
@@ -213,13 +214,15 @@ Any definition can be overridden from the command line of KiBot with
 
 The template targets **JLCPCB** without extra cost options, with one profile
 per JLCPCB standard stackup (1.6 mm) in
-[`kibot_resources/stackups`](../kibot_resources/stackups):
+[`kibot_resources/stackups`](../kibot_resources/stackups), and a profile for
+boards milled on a desktop CNC ([below](#cnc-milling-makera-z1)):
 
 | Profile | JLCPCB stackup | Copper | Design rules |
 | --- | --- | --- | --- |
 | `jlcpcb_2l` | JLC0216A, 2 layers | 1 oz | 1-2 layers: 0.10 mm track/space, vias 0.3/0.5 mm min., PTH annular ring 0.18 mm |
 | `jlcpcb_4l` (default) | JLC04161H-7628, 4 layers | 1 oz outer / 0.5 oz inner | multilayer: 0.09 mm track/space, vias 0.2/0.45 mm min. |
 | `jlcpcb_6l` | JLC06161H-3313, 6 layers | 1 oz outer / 0.5 oz inner | multilayer (same as 4 layers) |
+| `makera_z1_2l` | CNC milled FR4 1.5 mm, 2 layers | 1 oz | isolation 0.2 mm min. (0.3 mm net classes), vias 0.6/1.2 mm min., no plating |
 
 Switch at any time, even in the middle of a project (close it in KiCad first,
 then commit the changes):
@@ -229,6 +232,7 @@ then commit the changes):
 ./run_kibot.sh --stackup jlcpcb_2l   # JLC0216A, 2 layers
 ./run_kibot.sh --stackup jlcpcb_6l   # JLC06161H-3313, 6 layers
 ./run_kibot.sh --stackup jlcpcb_4l   # back to JLC04161H-7628, 4 layers
+./run_kibot.sh --stackup makera_z1_2l  # CNC milling, 2 layers
 ```
 
 A profile sets:
@@ -238,8 +242,13 @@ A profile sets:
   constants), finish (HASL lead-free), colors.
 - **Design rules**: *Board Setup → Constraints* minimums, the via sizes of the
   *Track & Via* tool, and the `.kicad_dru` custom rules (from
-  `jlcpcb_2layer.kicad_dru` / `jlcpcb_multilayer.kicad_dru`). A `.kicad_dru`
-  you modified is kept (a warning tells you to compare it).
+  `jlcpcb_2layer.kicad_dru` / `jlcpcb_multilayer.kicad_dru` /
+  `makera_z1_2layer.kicad_dru`). A `.kicad_dru` you modified is kept (a
+  warning tells you to compare it).
+- **Fabrication notes** of the fabrication document
+  (`kibot_resources/templates/fabrication_notes.txt`, from
+  `fabrication_notes_jlcpcb.txt` / `fabrication_notes_makera_z1.txt`), kept
+  too if you modified them.
 - **Impedance net classes** `50R`, `USB_90R` and `DIFF_100R`, created or
   updated with the widths/gaps of the stackup (your other net classes are not
   touched). Assign them to your nets (*Board Setup → Net Classes*, or net class
@@ -255,7 +264,19 @@ A profile sets:
 The fabrication document, stackup table, Gerbers and drill files follow at the
 next run. Removing layers that still hold copper (i.e. 4 → 2 layers with inner
 planes) is refused, `--force` to override. Add a profile for another stackup or
-manufacturer by copying one of the YAML files.
+manufacturer by copying one of the YAML files. Profile entries:
+
+| Entry | Use |
+| --- | --- |
+| `name`, `description` | Shown by `--stackup list` |
+| `layers` | Top to bottom: `{copper: NAME, type, thickness}` / `{dielectric: core\|prepreg, material, thickness, epsilon_r, loss_tangent}` |
+| `copper_finish`, `mask_color`, `silk_color`, `mask_thickness`, `mask_epsilon_r` | Physical stackup |
+| `solder_mask`, `silkscreen` | `false`: no mask / silkscreen layers in the stackup (default `true`) |
+| `design_rules`, `fabrication_notes` | Files of `kibot_resources/stackups` copied to the project |
+| `board_rules`, `via_sizes` | *Board Setup → Constraints* (`.kicad_pro` keys) and *Pre-defined Sizes* vias |
+| `impedance` | Rows of the impedance table, `[]` for *No controlled impedance* |
+| `netclasses` | Net classes created or updated (`Default` included) |
+| `netclass_minimums` | The other net classes are raised to these values (never lowered) |
 
 The impedance values come from the JLCPCB
 [impedance calculator](https://jlcpcb.com/pcb-impedance-calculator), pairs with
@@ -280,6 +301,52 @@ a 0.2032 mm gap:
 Keep only the lines of the impedance table you really use: they are
 requirements for the manufacturer. The table is printed when the board setup
 has *Impedance controlled* enabled (*Board Setup → Physical Stackup*).
+
+### CNC milling (Makera Z1)
+
+`makera_z1_2l` targets boards isolation-milled on a
+[Makera Z1](https://www.makera.com/products/makera-z1-desktop-cnc) (also valid
+for the Carvera / Carvera Air), from the Makera double-sided FR4 blanks
+(1.5 mm, 35 µm copper). Makera doesn't publish PCB design rules: the values come
+from the Makera community (Discord `#all-things-pcb` and `#z1-general`) and the
+[Carvera PCB guide](https://github.com/brunostjohn/CarveraPCBGuide).
+
+| Rule | Board Setup / `.kicad_dru` minimum | Net classes | Why |
+| --- | --- | --- | --- |
+| Isolation (clearance, all copper) | 0.2 mm | `Default` 0.3 mm, `POWER` 0.4 mm | Groove = tip + 2 × depth × tan(angle/2): 0.1 mm 30° V-bit ≈ 0.18 mm at 0.15 mm depth, 60° V-bit ≈ 0.27 mm. 0.2 mm needs the 30° bit and mesh auto-leveling |
+| Track width | 0.25 mm | `Default` 0.4 mm, `POWER` 1.0 mm, `CNC_FINE` 0.25 mm | The V-bit eats the tracks (Z1 users report 0.25 mm tracks coming out too thin) |
+| Holes | 0.6 mm | | Smallest usual drill bit, holes are **not plated** |
+| Vias | 0.6 mm hole / 1.2 mm, ring 0.3 mm | 0.8 / 1.6 mm (sizes 0.6/1.2, 0.8/1.6, 1.0/2.0) | Rivets or wires, set by hand: flange and flip misalignment |
+| Pad annular ring | 0.25 mm | | Copper left after drilling and flipping |
+| Slots, castellations | 0.8 mm | | Milled with a 0.8 mm corn bit |
+| Hole to hole / to copper | 0.5 / 0.3 mm | | Drill wander, FR4 web |
+| Copper to edge | 0.5 mm | | Outline cut after the flip |
+| Zone spokes | 0.3 mm | | Thin necks are cut or lifted |
+
+The profile also:
+
+- **Raises every other net class** to 0.4 mm tracks / 0.3 mm clearance / 1.6/0.8
+  mm vias (`netclass_minimums`), so the router places machinable copper. Values
+  are only raised: switching back to a JLCPCB profile keeps them (valid,
+  just larger), and it restores the impedance classes.
+- Removes the solder mask and silkscreen from the stackup, sets *No controlled
+  impedance* and CNC fabrication notes (tools, order of operations, copper
+  protection).
+
+Design for milling:
+
+- **No plated holes**: a through-hole pin only connects on the layer where it
+  can be soldered. Route through-hole parts on the bottom (the side opposite the
+  part body), or solder the pin on both sides when it is accessible. Keep vias
+  few: each one is a rivet or a wire.
+- **Fine pitch**: the DRC isolation rule applies to the pads of the footprints,
+  so parts below ~0.5 mm pitch report errors. 0402 passives are the practical
+  limit. Use `CNC_FINE` only for escapes near fine pitch parts.
+- **Pour ground** on both layers: less copper to remove, and MakeraCAM uses the
+  zone outlines for the isolation pocket.
+- Generate with the usual variants: MakeraCAM / FlatCAM take the Gerbers and
+  Excellon drill files of `Manufacturing/Fabrication/Gerbers` (the JLCPCB
+  ZIP is still generated, ignore it).
 
 ### Manufacturing checks
 
