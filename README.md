@@ -5,8 +5,8 @@
 <h1 align="center">Board Name</h1>
 
 <p align="center" width="100%">
-  <a href="/actions/workflows/ci.yaml">
-    <img alt="KiBot" src="/actions/workflows/ci.yaml/badge.svg">
+  <a href="https://github.com/your-user/your-repo/actions/workflows/ci.yaml">
+    <img alt="KiBot" src="https://github.com/your-user/your-repo/actions/workflows/ci.yaml/badge.svg">
   </a>
 </p>
 
@@ -28,7 +28,7 @@
 | Parameter | Value |
 | --- | --- |
 | Project | Project Name |
-| Revision |  |
+| Revision | (Unreleased) |
 | Status | DRAFT |
 | Dimensions | N/A × N/A mm |
 | Thickness | 1.61 mm |

@@ -2,7 +2,7 @@
 <export version="E">
   <design>
     <source>/project/KiCad10_KiBot_Template.kicad_sch</source>
-    <date>2026-09-27T11:12:11</date>
+    <date>2026-09-27T11:35:15</date>
     <tool>Eeschema 10.0.5-unknown-202607221313~667fa36054~ubuntu25.10.1</tool>
     <textvar name="ASSEMBLY_NOTES"/>
     <textvar name="BOARD_NAME">Board Name</textvar>
