@@ -138,6 +138,9 @@ jobs:
         run: |
           python3 kibot_resources/scripts/get_changelog.py -f CHANGELOG.md --markdown \
             --version "${{ github.ref_name }}" > "$RUNNER_TEMP/release_notes.md"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/release_notes.md"; then
+            echo "_No entry in CHANGELOG.md for this version._" > "$RUNNER_TEMP/release_notes.md"
+          fi
           cat "$RUNNER_TEMP/release_notes.md"
 
       - name: Cache 3D models
