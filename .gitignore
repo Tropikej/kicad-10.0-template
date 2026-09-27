@@ -21,3 +21,7 @@ kibot_logs/
 
 # KiCost API keys, never commit them
 kicost_config_local.yaml
+
+# Python
+__pycache__/
+*.pyc
