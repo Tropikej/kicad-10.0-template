@@ -246,6 +246,11 @@ A profile sets:
   labels in the schematic).
 - **Impedance table** of the fabrication document
   (`kibot_resources/templates/impedance_table.txt`).
+- **Zones** refilled with the new clearances. KiBot doesn't refill them
+  (`CHECK_ZONE_FILLS: false`, the Gerbers use the fills saved in the PCB), so
+  stale fills would fail the DRC (i.e. `copper_edge_clearance` when the edge
+  clearance goes from 0.25 to 0.3 mm). `./run_kibot.sh --stackup NAME --no-fill` to skip it (then refill in
+  KiCad, *Edit → Fill All Zones*, `B`).
 
 The fabrication document, stackup table, Gerbers and drill files follow at the
 next run. Removing layers that still hold copper (i.e. 4 → 2 layers with inner

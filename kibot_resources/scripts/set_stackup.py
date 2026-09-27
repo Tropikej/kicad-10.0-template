@@ -4,6 +4,7 @@ Applies a stackup profile (kibot_resources/stackups/*.yaml) to a KiCad 10
 project:
 - PCB: number of copper layers, copper layer names/types and physical stackup
   (thicknesses, materials, dielectric constants, finish, colors)
+- zones refilled with the new rules (KiCad Python API, when available)
 - project: impedance net classes, Board Setup minimums, via sizes, design
   rules file (.kicad_dru, only if not customized)
 - impedance table of the fabrication document
@@ -81,6 +82,31 @@ def update_project(pro_file, profile, profiles_dir):
     return msgs
 
 COPPER_RE = re.compile(r'^(F|B|In\d+)\.Cu$')
+
+
+def refill_zones(board, pro_file):
+    """ Refills the zones with the new rules, the gerbers use the stored fills """
+    try:
+        import pcbnew
+    except ImportError:
+        return 'KiCad Python API not available, refill the zones in KiCad (Edit > Fill All Zones, B)'
+    # pcbnew rewrites the project file when saving the board, keep ours
+    pro_text = None
+    if os.path.isfile(pro_file):
+        with open(pro_file, 'rb') as f:
+            pro_text = f.read()
+    try:
+        pcb = pcbnew.LoadBoard(board)
+        zones = pcb.Zones()
+        if not len(zones):
+            return None
+        pcbnew.ZONE_FILLER(pcb).Fill(zones)
+        pcb.Save(board)
+    finally:
+        if pro_text is not None:
+            with open(pro_file, 'wb') as f:
+                f.write(pro_text)
+    return '{} zone(s) refilled'.format(len(zones))
 
 
 def copper_names(n):
@@ -176,6 +202,7 @@ def main():
     parser.add_argument('-d', '--dir', default='kibot_resources/stackups', help='Stackup profiles dir')
     parser.add_argument('--force', action='store_true', help='Remove copper layers even if they are used')
     parser.add_argument('--list', action='store_true', help='List the available profiles')
+    parser.add_argument('--no-fill', action='store_true', help="Don't refill the zones")
     parser.add_argument('--impedance-table', default='kibot_resources/templates/impedance_table.txt',
                         help='Impedance table written from the profile (`impedance` entry)')
     args = parser.parse_args()
@@ -256,6 +283,12 @@ def main():
     if os.path.isfile(pro_file):
         for msg in update_project(pro_file, profile, os.path.dirname(os.path.abspath(profile_file))):
             print('{}: {}'.format(pro_file, msg))
+
+    # After the project update, so the fills use the new clearances
+    if not args.no_fill:
+        msg = refill_zones(board, pro_file)
+        if msg:
+            print('{}: {}'.format(board, msg))
     return 0
 
 

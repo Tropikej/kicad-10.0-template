@@ -36,6 +36,7 @@ server_port=8000
 log_dir=""
 stackup=""
 force_flag=false
+no_fill_flag=false
 extra_args=()
 
 function display_help() {
@@ -55,9 +56,11 @@ function display_help() {
     echo -e "  --log-dir DIR               Store the KiBot logs in DIR."
     echo -e "  --skip-checks               Don't run the manufacturing checks after the generation."
     echo -e "  --stackup NAME|list         Apply a stackup profile of kibot_resources/stackups to the PCB"
-    echo -e "                              (copper layers, stackup, design rules, impedance net classes)."
+    echo -e "                              (copper layers, stackup, design rules, impedance net classes,"
+    echo -e "                              zones refilled)."
     echo -e "                              Close the board in KiCad first. 'list' shows the profiles."
     echo -e "  --force                     With --stackup: remove copper layers even if they are used."
+    echo -e "  --no-fill                   With --stackup: don't refill the zones."
     echo -e "  --server [PORT]             Start an HTTP server to browse the outputs (default: 8000)."
     echo -e "  --stop-server               Stop the running HTTP server."
     echo -e "  --init [OPTIONS]            Set the project metadata and rename the project files, asks"
@@ -125,6 +128,9 @@ while [[ $# -gt 0 ]]; do
         --force)
             force_flag=true
             ;;
+        --no-fill)
+            no_fill_flag=true
+            ;;
         --log-dir)
             if [[ -n $2 && $2 != -* ]]; then log_dir="$2"; shift
             else echo -e "${YELLOW}Warning: --log-dir requires a value.${NC}"; exit 1; fi
@@ -181,6 +187,7 @@ if [[ -n "$stackup" ]]; then
     fi
     stackup_args=("$stackup")
     if [[ "$force_flag" == true ]]; then stackup_args+=(--force); fi
+    if [[ "$no_fill_flag" == true ]]; then stackup_args+=(--no-fill); fi
     exec python3 kibot_resources/scripts/set_stackup.py "${stackup_args[@]}"
 fi
 
