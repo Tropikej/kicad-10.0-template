@@ -70,7 +70,7 @@ groups:
       - pdf_docs
       - jlcpcb
       - @MD_README_OUTPUT@
-      # - @HTML_KICANVAS_OUTPUT@ # Very experimental, excluded for now
+      - @HTML_KICANVAS_OUTPUT@
       - @HTML_KIRI_OUTPUT@
       - @HTML_NAV_RES_OUTPUT@
 

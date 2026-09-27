@@ -1,4 +1,5 @@
-# KiBot output for exploring PCB/SCH files
+# KiBot output: interactive schematic viewer in the browser (KiCanvas)
+# Needs an HTTP server (browsers block local files): ./run_kibot.sh --serve
 # https://kibot.readthedocs.io/en/latest/configuration/outputs/kicanvas.html
 
 kibot:
@@ -13,7 +14,9 @@ outputs:
   options:
     dnf_filter: _kibom_dnf_Config
     overlay: true
-    source: ["schematic", "pcb", "project"]
+    # KiCanvas (2026-04) can't parse KiCad 10 PCBs (gr_text render cache): the
+    # PCB is in the interactive BoM and KiRI. Add "pcb" when KiCanvas supports it.
+    source: ["schematic", "project"]
 
 definitions:
   NAME: html_kicanvas
