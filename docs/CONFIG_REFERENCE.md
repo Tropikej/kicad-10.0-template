@@ -21,6 +21,7 @@ Read by the launcher (`kibot_launch.sh`, `run_kibot.sh`, `run_kibot.ps1`) and th
 | `boards` | ` ` | Multi-board repository: folders of the KiCad projects, space-separated, i.e. `boards: hw/main hw/io`. Each board gets its outputs in its folder (run one with ./run_kibot.sh --board hw/io). CHANGELOG.md, the version, the settings and the pipeline (kibot_yaml, kibot_resources) are shared. Empty: single project at the repository root. |
 | `panel` | `false` | Panel of the board made with KiKit (true \| false), for the PRELIMINARY / CHECKED / RELEASED runs: Manufacturing/Panel (panel PCB, preview, Gerbers + drill ZIP). Layout (rows, columns, mouse bites / V-cuts, rails...): PANEL_* definitions in kibot_yaml/kibot_main.yaml. |
 | `docker_image` | `ghcr.io/inti-cmnb/kicad10_auto_full:1.9.1-1_k10.0.5_d13.2_b4.2.4LTS` | KiBot docker image (KiCad 10 + KiBot + Blender). Pin a precise tag for reproducible builds. Tags: https://github.com/INTI-CMNB/kicad_auto/pkgs/container/kicad10_auto_full |
+| `drawio_image` | `rlespinasse/drawio-export:v4.60.0` | draw.io exporter image (headless draw.io), used by run_kibot.sh --diagrams to export Diagrams/*.drawio before importing them in the schematic sheets. Tags: https://hub.docker.com/r/rlespinasse/drawio-export/tags |
 | `ci_outputs` | `branch` | CI only: where the generated outputs go (they are always available as workflow artifacts too):<br>branch : snapshot (project + outputs) force-pushed to the branch<br>kibot-outputs/<branch>, so the history of your branches doesn't<br>grow with the outputs. Releases (tags) still commit them on main.<br>commit : committed on the branch itself at each run<br>none   : artifacts only (releases still commit them on main) |
 | `pr_variant` | `CHECKED` | CI only: project status used to check the pull requests (ERC/DRC need CHECKED). Nothing is committed for a pull request. |
 | `ci_render_engine` | `kicad` | CI only: 3D render engine (kicad \| blender). Blender is slow on the GitHub runners (~7 min per view with 4 CPUs): keep kicad and render with Blender locally (./run_kibot.sh -r blender). A manual run can still choose blender. |
@@ -229,6 +230,9 @@ OPTIONS
                               Close the board in KiCad first. 'list' shows the profiles.
   --force                     With --stackup: remove copper layers even if they are used.
   --no-fill                   With --stackup: don't refill the zones.
+  --diagrams                  Import Diagrams/<Sheet name>.drawio|svg|png in the sheets (run
+                              it with run_kibot.sh / run_kibot.ps1: they export the .drawio).
+  --fit                       With --diagrams: center and fit the pictures again.
   --server [PORT]             Start an HTTP server to browse the outputs (default: 8000).
   --stop-server               Stop the running HTTP server.
   --init [OPTIONS]            Set the project metadata and rename the project files, asks
@@ -255,6 +259,7 @@ EXAMPLES
   ./kibot_launch.sh --server 8080          Browse the outputs on http://localhost:8080.
   ./kibot_launch.sh --stackup jlcpcb_2l    Switch to the JLCPCB 2 layers stackup, rules and net classes.
   ./kibot_launch.sh --stackup makera_z1_2l CNC milled board (Makera Z1): unplated 2 layers, milling rules.
+  ./run_kibot.sh --diagrams                Import Diagrams/Block Diagram.drawio in the Block Diagram sheet.
 
 VARIANT DESCRIPTIONS
   DRAFT:       only schematic in progress, generates schematic PDF, netlist and BoM

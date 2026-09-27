@@ -27,6 +27,7 @@ definitions.
   - [3D renders: KiCad or Blender](#3d-renders-kicad-or-blender)
   - [Shared libraries](#shared-libraries-symbols-footprints-3d-models)
   - [Assembly variants (KiCad 10)](#assembly-variants-kicad-10)
+  - [Diagrams (draw.io)](#diagrams-drawio)
   - [Multi-board repositories](#multi-board-repositories)
 - [Running locally (Docker)](#running-locally-docker)
 - [CI/CD on GitHub Actions](#cicd-on-github-actions)
@@ -609,6 +610,35 @@ Run a single variant with `./run_kibot.sh -v LITE`, skip them with
 declared in its configuration: `kibot_main.yaml` declares one generic `kicad`
 variant named by the `ASSEMBLY_VARIANT` definition, set by the launcher.
 
+### Diagrams (draw.io)
+
+KiCad is not made for block diagrams: draw them in [draw.io](https://www.drawio.com/)
+(desktop app, web app or VS Code extension) and import them in the sheets as
+pictures. The template's *Block Diagram* sheet shows an example.
+
+1. Save the diagram as `Diagrams/<Sheet name>.drawio`, named after its sheet:
+   `Diagrams/Block Diagram.drawio` goes in `Block Diagram.kicad_sch`. A
+   `.svg` or `.png` (from another tool) works the same way.
+2. Import it:
+
+   ```
+   ./run_kibot.sh --diagrams          # or .\run_kibot.ps1 --diagrams
+   ```
+
+   The `.drawio` files are exported to PNG (transparent, 3x) by the draw.io
+   exporter image (`drawio_image` in `kibot_settings.yaml`, no draw.io
+   installation needed), then embedded in the sheets (256 colors palette,
+   ~100 KB per diagram). The first import centers the picture below the page
+   title and fits it to the page; the next ones only replace it, **keeping
+   the position and size** you gave it in KiCad. `--diagrams --fit` places it
+   again.
+3. Commit the sheet and `Diagrams/imported.json` (hashes of the imported
+   sources). The CI fails when a diagram changed but was not imported.
+
+Close the sheet in KiCad before importing. The picture prints sharp in the
+schematic PDF (~300 dpi on A3); multi-page `.drawio` files: one diagram per
+file (the first page is used). Multi-board repositories: `<board>/Diagrams`.
+
 ### Multi-board repositories
 
 Several boards of one product (i.e. a main board and an I/O board) can share
@@ -883,6 +913,7 @@ board. Testpoints are the symbols with a `TP` reference.
 ├─ AGENTS.md          # Instructions for coding agents (CLAUDE.md points to it)
 ├─ 3D                 # STEP / PCB3D models (generated)
 ├─ Computations       # Misc calculations (optional)
+├─ Diagrams           # draw.io diagrams imported in the sheets (--diagrams)
 ├─ docs               # This guide, CONFIG_REFERENCE.md (generated reference)
 ├─ HTML               # Web page to browse the outputs (generated)
 ├─ Images             # Pictures and 3D renders

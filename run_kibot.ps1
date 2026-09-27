@@ -13,6 +13,8 @@
                                               kibot_settings.yaml as git submodules
   .\run_kibot.ps1 --update-libs               Update the libraries to the latest
                                               commit of their branch
+  .\run_kibot.ps1 --diagrams [--fit]          Export Diagrams/*.drawio and import them in
+                                              the schematic sheets
 
   The image is read from kibot_settings.yaml (docker_image), it can be
   overridden with the KIBOT_IMAGE environment variable.
@@ -104,6 +106,31 @@ switch ($args[0]) {
 }
 
 $projectDir = $PSScriptRoot
+
+# Diagrams: export Diagrams/*.drawio to PNG with the draw.io exporter image
+# (headless draw.io), then kibot_launch.sh --diagrams imports them in the
+# sheets. The exporter sometimes hangs at start: time limit and retries.
+if ($args[0] -eq '--diagrams') {
+    $drawioImage = Get-Setting 'drawio_image'
+    if (-not $drawioImage) { $drawioImage = 'rlespinasse/drawio-export:v4.60.0' }
+    $boardsLine = Select-String -Path $settingsFile -Pattern '^boards:\s*([^#]*)' | Select-Object -First 1
+    $boards = @()
+    if ($boardsLine) { $boards = @($boardsLine.Matches[0].Groups[1].Value -split '[\s,]+' | Where-Object { $_ }) }
+    if (-not $boards) { $boards = @('.') }
+    foreach ($b in $boards) {
+        if (-not (Get-ChildItem -Path (Join-Path $b 'Diagrams') -Filter '*.drawio' -ErrorAction SilentlyContinue)) { continue }
+        Remove-Item -Recurse -Force (Join-Path $b 'Diagrams/export') -ErrorAction SilentlyContinue
+        $ok = $false
+        foreach ($try in 1..3) {
+            & docker run --rm --volume "${projectDir}:/data" --workdir /data `
+                --env DRAWIO_DESKTOP_COMMAND_TIMEOUT=60s $drawioImage `
+                -f png --scale 3 --border 20 --transparent --remove-page-suffix "$b/Diagrams"
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            Write-Warning "draw.io export failed or timed out (try $try/3)"
+        }
+        if (-not $ok) { throw "draw.io export of $b/Diagrams failed" }
+    }
+}
 # Nested docker (act, dev containers...): path of the project seen by the daemon
 if ($env:KIBOT_PROJECT_HOST_DIR) { $projectDir = $env:KIBOT_PROJECT_HOST_DIR }
 # Cache for the 3D models downloaded by KiBot: docker volume or host directory

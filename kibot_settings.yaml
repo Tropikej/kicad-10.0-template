@@ -41,6 +41,11 @@ panel: false
 # reproducible builds. Tags: https://github.com/INTI-CMNB/kicad_auto/pkgs/container/kicad10_auto_full
 docker_image: ghcr.io/inti-cmnb/kicad10_auto_full:1.9.1-1_k10.0.5_d13.2_b4.2.4LTS
 
+# draw.io exporter image (headless draw.io), used by run_kibot.sh --diagrams
+# to export Diagrams/*.drawio before importing them in the schematic sheets.
+# Tags: https://hub.docker.com/r/rlespinasse/drawio-export/tags
+drawio_image: rlespinasse/drawio-export:v4.60.0
+
 # CI only: where the generated outputs go (they are always available as
 # workflow artifacts too):
 #   branch : snapshot (project + outputs) force-pushed to the branch

@@ -22,6 +22,9 @@ kibot_logs/
 # KiCost API keys, never commit them
 kicost_config_local.yaml
 
+# Diagrams exported by run_kibot.sh --diagrams (imported in the sheets)
+**/Diagrams/export/
+
 # Python
 __pycache__/
 *.pyc

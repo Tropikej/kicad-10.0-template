@@ -11,6 +11,8 @@
 #   ./run_kibot.sh --update-libs               Update the libraries to the latest
 #                                              commit of their branch
 #   ./run_kibot.sh --check-libs                Fail if a library is missing (used by the CI)
+#   ./run_kibot.sh --diagrams [--fit]          Export Diagrams/*.drawio and import them in
+#                                              the schematic sheets
 #
 # The image is read from kibot_settings.yaml (docker_image), it can be
 # overridden with the KIBOT_IMAGE environment variable.
@@ -119,6 +121,33 @@ esac
 # Nested docker (act, dev containers...): the path of the project as seen by
 # the docker daemon can be given in KIBOT_PROJECT_HOST_DIR
 project_dir="${KIBOT_PROJECT_HOST_DIR:-$project_dir}"
+
+# Diagrams: export Diagrams/*.drawio to PNG with the draw.io exporter image
+# (headless draw.io), then kibot_launch.sh --diagrams imports them in the
+# sheets. The exporter sometimes hangs at start: time limit and retries.
+if [[ "$1" == --diagrams ]]; then
+    drawio_image="$(get_setting drawio_image)"
+    drawio_image="${drawio_image:-rlespinasse/drawio-export:v4.60.0}"
+    boards="$(sed -n 's/^boards:[[:space:]]*\([^#]*\).*/\1/p' "$settings_file" | head -n1 | tr ',' ' ')"
+    for b in ${boards:-.}; do
+        [[ -n "$(ls "$b"/Diagrams/*.drawio 2>/dev/null)" ]] || continue
+        rm -rf "$b/Diagrams/export"
+        ok=false
+        for try in 1 2 3; do
+            if docker run --rm --volume "$project_dir:/data" --workdir /data \
+                    --env DRAWIO_DESKTOP_COMMAND_TIMEOUT=60s "$drawio_image" \
+                    -f png --scale 3 --border 20 --transparent --remove-page-suffix "$b/Diagrams"; then
+                ok=true
+                break
+            fi
+            echo "draw.io export failed or timed out (try $try/3)" >&2
+        done
+        if [[ "$ok" != true ]]; then
+            echo "Error: draw.io export of $b/Diagrams failed" >&2
+            exit 1
+        fi
+    done
+fi
 
 image="${KIBOT_IMAGE:-$(get_setting docker_image)}"
 if [[ -z "$image" ]]; then

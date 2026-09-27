@@ -7,9 +7,9 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "KiBot docker image pinned in kibot_settings.yaml",
+      "description": "Docker images pinned in kibot_settings.yaml (KiBot, draw.io exporter)",
       "managerFilePatterns": ["/(^|/)kibot_settings\\.yaml$/"],
-      "matchStrings": ["docker_image:\\s*(?<depName>ghcr\\.io/[^:\\s]+):(?<currentValue>\\S+)"],
+      "matchStrings": ["(?:docker_image|drawio_image):\\s*(?<depName>[^:\\s]+):(?<currentValue>\\S+)"],
       "datasourceTemplate": "docker"
     }
   ],

@@ -39,6 +39,8 @@ board=""
 stackup=""
 force_flag=false
 no_fill_flag=false
+diagrams_flag=false
+fit_flag=false
 extra_args=()
 
 function display_help() {
@@ -67,6 +69,9 @@ function display_help() {
     echo -e "                              Close the board in KiCad first. 'list' shows the profiles."
     echo -e "  --force                     With --stackup: remove copper layers even if they are used."
     echo -e "  --no-fill                   With --stackup: don't refill the zones."
+    echo -e "  --diagrams                  Import Diagrams/<Sheet name>.drawio|svg|png in the sheets (run"
+    echo -e "                              it with run_kibot.sh / run_kibot.ps1: they export the .drawio)."
+    echo -e "  --fit                       With --diagrams: center and fit the pictures again."
     echo -e "  --server [PORT]             Start an HTTP server to browse the outputs (default: 8000)."
     echo -e "  --stop-server               Stop the running HTTP server."
     echo -e "  --init [OPTIONS]            Set the project metadata and rename the project files, asks"
@@ -93,6 +98,7 @@ function display_help() {
     echo -e "  ./kibot_launch.sh --server 8080          Browse the outputs on http://localhost:8080."
     echo -e "  ./kibot_launch.sh --stackup jlcpcb_2l    Switch to the JLCPCB 2 layers stackup, rules and net classes."
     echo -e "  ./kibot_launch.sh --stackup makera_z1_2l CNC milled board (Makera Z1): unplated 2 layers, milling rules."
+    echo -e "  ./run_kibot.sh --diagrams                Import Diagrams/Block Diagram.drawio in the Block Diagram sheet."
     echo
     echo -e "VARIANT DESCRIPTIONS"
     echo -e "  DRAFT:       only schematic in progress, generates schematic PDF, netlist and BoM"
@@ -147,6 +153,12 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-fill)
             no_fill_flag=true
+            ;;
+        --diagrams)
+            diagrams_flag=true
+            ;;
+        --fit)
+            fit_flag=true
             ;;
         --log-dir)
             if [[ -n $2 && $2 != -* ]]; then log_dir="$2"; shift
@@ -280,6 +292,18 @@ if [[ -d kibot_resources/fonts ]] && command -v fc-cache >/dev/null; then
 EOF
     export FONTCONFIG_FILE="$font_dir/fonts.conf"
     fc-cache >/dev/null 2>&1 || true
+fi
+
+# Diagrams: import the exported pictures in the sheets and exit
+if [[ "$diagrams_flag" == true ]]; then
+    diagram_args=(--project "$project_dir")
+    if [[ "$fit_flag" == true ]]; then diagram_args+=(--fit); fi
+    python3 kibot_resources/scripts/import_diagrams.py "${diagram_args[@]}"
+    ret=$?
+    if [[ -n "$HOST_UID" && -n "$HOST_GID" && "$(id -u)" == "0" ]]; then
+        chown -R "$HOST_UID:$HOST_GID" "$project_dir" 2>/dev/null
+    fi
+    exit $ret
 fi
 
 # Stackup profile: edit the PCB and exit
