@@ -66,6 +66,7 @@ def main():
     parser.add_argument('--link-base', default='', help='URL prefix to link the files (i.e. outputs branch)')
     parser.add_argument('--artifacts-url', default='', help='URL of the run artifacts')
     parser.add_argument('-o', '--output', help='Output file (default: stdout)')
+    parser.add_argument('--append', action='append', default=[], help='Markdown file(s) to append, if they exist')
     args = parser.parse_args()
 
     ok = args.status == 'success'
@@ -111,6 +112,10 @@ def main():
     if docs:
         out += ['### Documents', '', '| Document | Files |', '| --- | --- |'] + docs + ['']
 
+    for extra in args.append:
+        if os.path.isfile(extra):
+            with open(extra, encoding='utf-8') as f:
+                out += ['', f.read()]
     text = '\n'.join(out) + '\n'
     if args.output:
         with open(args.output, 'w', encoding='utf-8') as f:

@@ -20,6 +20,7 @@ definitions.
   - [Pipeline settings: `kibot_settings.yaml`](#pipeline-settings-kibot_settingsyaml)
   - [KiBot parameters: `kibot_yaml/kibot_main.yaml`](#kibot-parameters-kibot_yamlkibot_mainyaml)
   - [Stackup and design rules (JLCPCB)](#stackup-and-design-rules-jlcpcb)
+  - [Manufacturing checks](#manufacturing-checks)
   - [Ordering at JLCPCB](#ordering-at-jlcpcb)
   - [3D renders: KiCad or Blender](#3d-renders-kicad-or-blender)
   - [Shared libraries](#shared-libraries-symbols-footprints-3d-models)
@@ -252,6 +253,30 @@ Keep only the lines you really use: they are requirements for the
 manufacturer. The table is printed when the board setup has *Impedance
 controlled* enabled (*Board Setup → Physical Stackup*).
 
+### Manufacturing checks
+
+After each generation, `kibot_launch.sh` checks the files that leave for the
+factory with its own parser
+([`check_manufacturing.py`](../kibot_resources/scripts/check_manufacturing.py)),
+independent of KiCad. Errors fail the run (locally and in CI), and the report
+is in the run summary and the pull request comments:
+
+| Files | Checks |
+| --- | --- |
+| Gerbers and drill (`Fabrication/Gerbers` and the manufacturer ZIPs) | Files complete (M02), board outline closed and its size, copper layers count = drill files layers, every hole inside the board, every plated hole on copper on both outer layers, mask/silkscreen present |
+| Assembly | BoM / JLCPCB BoM / pick and place consistency (no DNP part ordered), LCSC code format, JLCPCB pick and place on the pads of the JLCPCB Gerbers (same origin), rotation of the 2-pad parts |
+| PDF documents | No unexpanded `${VARIABLE}`, template placeholders (*Board Name*...), revision printed |
+
+Skip them with `./run_kibot.sh --skip-checks`. The generator also empties the
+`Gerbers`, `Drill Tables` and `JLCPCB` folders before a PCB run, so no stale
+file (i.e. Gerbers of layers renamed by a stackup change) is left behind.
+
+> [!NOTE]
+> Two runs on the same commit give the same Gerbers, drill, ODB++, STEP, BoMs
+> and reports apart from their timestamps; the 3D renders (and the PDFs
+> embedding them) have a tiny rendering noise. The outputs are not byte for
+> byte reproducible: with `ci_outputs: commit`, each run makes a small commit.
+
 ### Ordering at JLCPCB
 
 PRELIMINARY and higher generate the JLCPCB order files in
@@ -408,7 +433,8 @@ CI.
 ./run_kibot.sh -v CHECKED -r blender  Everything, ERC/DRC, Blender renders
 ./run_kibot.sh -v EXAMPLE             Assembly variant, outputs in Variants/
 ./run_kibot.sh --version 1.2.0        Force the revision printed in the documents
-./run_kibot.sh --log-dir kibot_logs   Keep the KiBot debug logs
+./run_kibot.sh --log-dir kibot_logs   Keep the KiBot debug logs (and the checks report)
+./run_kibot.sh --skip-checks          Don't run the manufacturing checks
 ./run_kibot.sh --costs                XLSX BoM with costs (KiCost)
 ./run_kibot.sh --help                 All the options
 ./run_kibot.sh --serve [PORT]         Browse the outputs on http://localhost:8000
@@ -476,7 +502,8 @@ With `branch`, the generated `README.md` (renders, links) is visible on the
 **Run summary**: each run writes a summary on its page (*Actions* tab): status,
 revision, ERC/DRC errors and warnings by type, and links to the documents. For
 pull requests the same summary is posted as a comment, updated at each push.
-The check fails if KiBot fails (i.e. ERC errors).
+It includes the [manufacturing checks](#manufacturing-checks). The check fails
+if KiBot fails (i.e. ERC errors) or if the manufacturing checks find errors.
 
 The 3D renders use `ci_render_engine` (`kicad` by default, see
 [3D renders](#3d-renders-kicad-or-blender)). Library submodules are fetched
@@ -640,6 +667,9 @@ board. Testpoints are the symbols with a `TP` reference.
   endings, enforced by `.gitattributes`. Re-checkout them if needed.
 - **Files owned by root on Linux**: `run_kibot.sh` gives them back to your
   user at the end of the run.
+- **`fatal: not a git repository` in a git worktree**: the `.git` file of a
+  worktree points outside the folder mounted in the container. Run the
+  generation from a normal clone.
 
 ## DIFFERENCES WITH KDT_HIERARCHICAL_KIBOT
 

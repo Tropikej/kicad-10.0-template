@@ -188,7 +188,8 @@ jobs:
           fi
           python3 kibot_resources/scripts/ci_summary.py --variant "$VARIANT" --status "$STATUS" \
             --revision "$REVISION" --engine "$ENGINE" --link-base "$link_base" \
-            --artifacts-url "$RUN_URL" -o "$RUNNER_TEMP/summary.md"
+            --artifacts-url "$RUN_URL" --append "$KIBOT_LOGS/manufacturing_checks.md" \
+            -o "$RUNNER_TEMP/summary.md"
           cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment the pull request
