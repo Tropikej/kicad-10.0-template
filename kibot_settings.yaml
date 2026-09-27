@@ -1,0 +1,49 @@
+# Pipeline settings, shared by the local Docker runner (run_kibot.sh /
+# run_kibot.ps1) and the GitHub Actions workflow (.github/workflows/ci.yaml).
+#
+# KiBot output parameters (metadata, directories, 3D render engine, layer
+# names...) are in kibot_yaml/kibot_main.yaml, `definitions:` section.
+#
+# Keep the simple `key: value` format: this file is also parsed by shell
+# scripts on the host.
+
+# Project status, selects which outputs are generated:
+#   DRAFT       : schematic in progress -> schematic PDF, netlist, BoM
+#   PRELIMINARY : schematic + PCB documents (fab/assembly/gerbers/routing PDF,
+#                 3D renders, STEP...), no ERC/DRC
+#   CHECKED     : same as PRELIMINARY, plus ERC/DRC reports
+#   RELEASED    : same as CHECKED. Selected automatically in CI when a
+#                 semantic version tag (x.y.z) is pushed
+# Any other name is treated as an assembly variant (outputs in Variants/).
+variant: DRAFT
+
+# KiBot docker image (KiCad 10 + KiBot + Blender). Pin a precise tag for
+# reproducible builds. Tags: https://github.com/INTI-CMNB/kicad_auto/pkgs/container/kicad10_auto_full
+docker_image: ghcr.io/inti-cmnb/kicad10_auto_full:1.9.1-1_k10.0.5_d13.2_b4.2.4LTS
+
+# CI only: commit the generated outputs back to the repository (true/false).
+# When false, the outputs are only available as a workflow artifact.
+commit_outputs: true
+
+# CI only: 3D render engine (kicad | blender). Blender is slow on the GitHub
+# runners (~7 min per view with 4 CPUs): keep kicad and render with Blender
+# locally (./run_kibot.sh -r blender). A manual run can still choose blender.
+ci_render_engine: kicad
+
+# Shared KiCad libraries (symbols, footprints, 3D models) as git submodules.
+# One block per library, <VAR> being the KiCad path variable used by the
+# library (its 3D models are referenced as ${VAR}/...):
+#   lib_<VAR>_url:    git URL (https) of the library repository
+#   lib_<VAR>_path:   folder in the project (optional, default: lib/<repository name>)
+#   lib_<VAR>_branch: branch to follow (optional, default: the repository default branch)
+# Only lib_<VAR>_path, without url: library already inside the project.
+#
+# ./run_kibot.sh --setup-libs   adds/updates the git submodules (commit them after)
+# ./run_kibot.sh --update-libs  moves them to the latest commit of their branch
+# The runners and the CI define ${VAR} in the container, pointing to the folder.
+# Private repository: add a KICAD_LIBS_TOKEN secret (see docs/TEMPLATE_GUIDE.md).
+#
+# Example:
+# lib_KEJLABS_LIB_url: https://github.com/kejlabs/kicad-libs.git
+# lib_KEJLABS_LIB_path: lib/kejlabs-kicad-libs
+# lib_KEJLABS_LIB_branch: main

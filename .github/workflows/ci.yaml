@@ -1,0 +1,212 @@
+name: KiBot
+
+# Generates the project outputs with KiBot. The job runs ./run_kibot.sh, the
+# same command as a local run: the docker image of kibot_settings.yaml
+# executes kibot_launch.sh on the checked out project.
+#
+# - push on main/dev    : outputs for the variant set in kibot_settings.yaml
+# - push of a tag x.y.z : RELEASED variant, CHANGELOG.md update, outputs
+#                         committed on main and GitHub release with assets
+# - manual run (Actions tab) : variant and render engine can be overridden
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Variant (settings = the one in kibot_settings.yaml)'
+        type: choice
+        options: [settings, DRAFT, PRELIMINARY, CHECKED, RELEASED]
+        default: settings
+      render_engine:
+        description: '3D render engine (settings = ci_render_engine in kibot_settings.yaml)'
+        type: choice
+        options: [settings, kicad, blender]
+        default: settings
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+' # Semantic versioning tags
+    branches:
+      - main
+      - dev
+    paths-ignore:
+      - '**.md'
+
+permissions:
+  contents: write
+
+# Never run two generations for the same branch at the same time
+concurrency:
+  group: kibot-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  KIBOT_LOGS: kibot_logs
+  KIBOT_3D_CACHE_DIR: ${{ github.workspace }}/../kibot_3d_models
+
+jobs:
+  generate_outputs:
+    name: Generate outputs
+    runs-on: ubuntu-latest
+    # Outputs were already generated on the source branch of a merged PR
+    if: "!contains(github.event.head_commit.message, 'Merge pull request') || github.ref_type == 'tag'"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # Full history for KiRI and the git text variables
+
+      # Shared libraries as git submodules. A private library repository needs a
+      # token with read access to it in the KICAD_LIBS_TOKEN secret (the
+      # default GITHUB_TOKEN only reads this repository). The token is only
+      # used here, the outputs are pushed with the GITHUB_TOKEN.
+      - name: Checkout libraries (git submodules)
+        env:
+          LIBS_TOKEN: ${{ secrets.KICAD_LIBS_TOKEN || github.token }}
+        run: |
+          if [[ ! -f .gitmodules ]]; then
+            ./run_kibot.sh --check-libs
+            exit
+          fi
+          git -c "http.https://github.com/.extraheader=" \
+              -c "url.https://x-access-token:${LIBS_TOKEN}@github.com/.insteadOf=https://github.com/" \
+              -c "url.https://x-access-token:${LIBS_TOKEN}@github.com/.insteadOf=git@github.com:" \
+              submodule update --init --recursive
+          # The libraries declared in kibot_settings.yaml must be there
+          ./run_kibot.sh --check-libs
+
+      - name: Read settings
+        id: settings
+        run: |
+          get_setting() {
+            sed -n "s/^$1:[[:space:]]*\([^#]*\).*/\1/p" kibot_settings.yaml | head -n1 | sed 's/[[:space:]]*$//; s/^["'\'']//; s/["'\'']$//'
+          }
+          variant="$(get_setting variant)"
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "Tag pushed: forcing the RELEASED variant"
+            variant=RELEASED
+          elif [[ -n "${{ inputs.variant }}" && "${{ inputs.variant }}" != "settings" ]]; then
+            variant="${{ inputs.variant }}"
+          fi
+          render_engine="$(get_setting ci_render_engine)"
+          if [[ -n "${{ inputs.render_engine }}" && "${{ inputs.render_engine }}" != "settings" ]]; then
+            render_engine="${{ inputs.render_engine }}"
+          fi
+          {
+            echo "variant=${variant:-DRAFT}"
+            echo "render_engine=${render_engine:-kicad}"
+            echo "commit_outputs=$(get_setting commit_outputs)"
+            echo "image=$(get_setting docker_image)"
+          } | tee -a "$GITHUB_OUTPUT"
+
+      - name: Configure git
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      # Release: rename the [Unreleased] section of CHANGELOG.md to the tag,
+      # before the generation so the documents show the right revision history
+      - name: Update CHANGELOG
+        if: github.ref_type == 'tag'
+        uses: thomaseizinger/keep-a-changelog-new-release@v3
+        with:
+          tag: ${{ github.ref_name }}
+
+      - name: Extract release notes
+        if: github.ref_type == 'tag'
+        run: |
+          python3 kibot_resources/scripts/get_changelog.py -f CHANGELOG.md \
+            --version "${{ github.ref_name }}" > "$RUNNER_TEMP/release_notes.md"
+          cat "$RUNNER_TEMP/release_notes.md"
+
+      - name: Cache 3D models
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.KIBOT_3D_CACHE_DIR }}
+          key: kibot-3d-models-${{ github.run_id }}
+          restore-keys: kibot-3d-models-
+
+      - name: Pull KiBot image
+        run: docker pull "${{ steps.settings.outputs.image }}"
+
+      - name: Run KiBot
+        env:
+          VARIANT: ${{ steps.settings.outputs.variant }}
+          RENDER_ENGINE: ${{ steps.settings.outputs.render_engine }}
+        run: |
+          args=(-v "$VARIANT" --log-dir "$KIBOT_LOGS")
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            args+=(--version "${{ github.ref_name }}")
+          fi
+          if [[ -n "$RENDER_ENGINE" ]]; then
+            args+=(-r "$RENDER_ENGINE")
+          fi
+          ./run_kibot.sh "${args[@]}"
+
+      - name: Store logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kibot_logs
+          path: ${{ env.KIBOT_LOGS }}
+
+      - name: Store outputs
+        uses: actions/upload-artifact@v7
+        with:
+          name: kibot_outputs_${{ steps.settings.outputs.variant }}
+          path: |
+            .
+            !.git
+            !${{ env.KIBOT_LOGS }}
+
+      - name: Commit outputs (branch)
+        if: github.ref_type == 'branch' && steps.settings.outputs.commit_outputs == 'true'
+        env:
+          VARIANT: ${{ steps.settings.outputs.variant }}
+        run: |
+          rm -rf "$KIBOT_LOGS"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes in the outputs"
+            exit 0
+          fi
+          git commit -m "Update outputs (${VARIANT}) [skip ci]"
+          # Someone may have pushed during the generation: rebase, keeping
+          # the freshly generated outputs in case of conflict
+          for _ in 1 2 3; do
+            git pull --rebase -X theirs origin "${{ github.ref_name }}" && \
+              git push origin "HEAD:${{ github.ref_name }}" && exit 0
+            sleep 5
+          done
+          exit 1
+
+      - name: Commit outputs and CHANGELOG (release)
+        if: github.ref_type == 'tag'
+        run: |
+          rm -rf "$KIBOT_LOGS"
+          git add -A
+          git commit -m "Update outputs (release ${{ github.ref_name }}) [skip ci]" || true
+          release_commit=$(git rev-parse HEAD)
+          git fetch origin main
+          git checkout -B main origin/main
+          git merge --no-ff "$release_commit" -X theirs \
+            -m "Merge outputs of release ${{ github.ref_name }} [skip ci]"
+          git push origin main
+          # Back to the release files for the next step
+          git checkout "$release_commit"
+
+      - name: Create GitHub release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v3
+        with:
+          name: ${{ github.ref_name }}
+          body_path: ${{ runner.temp }}/release_notes.md
+          files: |
+            Schematic/*.pdf
+            PCB/*.pdf
+            Manufacturing/Assembly/*
+            Manufacturing/Fabrication/*.pdf
+            Manufacturing/Fabrication/*.zip
+            Manufacturing/Fabrication/*.txt
+            3D/*.step
+            Images/*.png
+            Testing/Testpoints/*.csv

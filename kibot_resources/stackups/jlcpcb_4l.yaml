@@ -1,0 +1,22 @@
+# JLCPCB 4 layers, 1.6 mm, stackup JLC04161H-7628 (JLCPCB default, no extra cost)
+# 1 oz outer copper, 0.5 oz inner copper
+# https://jlcpcb.com/impedance
+# Apply with: ./run_kibot.sh --stackup jlcpcb_4l
+
+name: JLC04161H-7628
+description: JLCPCB 4 layers 1.6 mm, 7628 prepreg
+copper_finish: HAL lead-free
+mask_color: Green
+silk_color: White
+mask_thickness: 0.01
+mask_epsilon_r: 3.8
+
+# Top to bottom. Copper layers: user name and KiCad type (signal, power, mixed, jumper)
+layers:
+  - {copper: "L1 (Sig)", type: signal, thickness: 0.035}
+  - {dielectric: prepreg, material: "7628", thickness: 0.2104, epsilon_r: 4.4, loss_tangent: 0.02}
+  - {copper: "L2 (GND)", type: power, thickness: 0.0152}
+  - {dielectric: core, material: FR4, thickness: 1.065, epsilon_r: 4.6, loss_tangent: 0.02}
+  - {copper: "L3 (PWR)", type: power, thickness: 0.0152}
+  - {dielectric: prepreg, material: "7628", thickness: 0.2104, epsilon_r: 4.4, loss_tangent: 0.02}
+  - {copper: "L4 (Sig)", type: signal, thickness: 0.035}

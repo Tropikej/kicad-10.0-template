@@ -1,0 +1,589 @@
+# KiCad 10 KiBot Template: Guide
+
+A **KiCad 10** project template for **automated**, professional documentation
+generation with [KiBot](https://kibot.readthedocs.io/en/master/), running
+**locally with Docker** or **remotely on GitHub Actions**, with exactly the
+same docker image and the same script.
+
+Heavily inspired by (and compatible with the project conventions of)
+[KDT_Hierarchical_KiBot](https://github.com/nguyen-v/KDT_Hierarchical_KiBot)
+by Vincent Nguyen: same outputs, same `DRAFT` / `PRELIMINARY` / `CHECKED` /
+`RELEASED` mechanism, same PCB layers and `kibot_*` groups, same YAML
+definitions.
+
+## TABLE OF CONTENTS
+
+- [Features](#features)
+- [Outputs per project status](#outputs-per-project-status)
+- [Getting started](#getting-started)
+- [Configuration](#configuration)
+  - [Pipeline settings: `kibot_settings.yaml`](#pipeline-settings-kibot_settingsyaml)
+  - [KiBot parameters: `kibot_yaml/kibot_main.yaml`](#kibot-parameters-kibot_yamlkibot_mainyaml)
+  - [Stackup and design rules (JLCPCB)](#stackup-and-design-rules-jlcpcb)
+  - [3D renders: KiCad or Blender](#3d-renders-kicad-or-blender)
+  - [Shared libraries](#shared-libraries-symbols-footprints-3d-models)
+- [Running locally (Docker)](#running-locally-docker)
+- [CI/CD on GitHub Actions](#cicd-on-github-actions)
+- [Project conversion guide](#project-conversion-guide)
+- [Directory structure](#directory-structure)
+- [Troubleshooting](#troubleshooting)
+- [Differences with KDT_Hierarchical_KiBot](#differences-with-kdt_hierarchical_kibot)
+- [Credits](#credits)
+
+## FEATURES
+
+- **KiCad 10** project (hierarchical schematic, custom drawing sheets) and
+  KiBot 1.9 configuration.
+- **JLCPCB ready**: design rules and 4-layer stackup (JLC04161H-7628), switch
+  to 6 layers (JLC06161H-3313) with one command.
+- **Automated fabrication document**: stackup table, fabrication notes, drill
+  drawings/tables, testpoint tables/highlighting, one page per copper layer.
+- **Automated assembly document**: 3D images, component count table, assembly
+  notes, DNP crosses.
+- **Gerbers as PDF**: one page per fabrication layer, in color, to review what
+  is sent to the manufacturer without a Gerber viewer.
+- **PCB routing PDF**: all copper layers, then one page per copper layer and
+  the silkscreens.
+- **Schematic PDF** with automatic table of contents and revision history
+  synchronised with `CHANGELOG.md`.
+- **3D renders** (top, bottom, angled) with the **KiCad 3D viewer (fast) or
+  Blender (photo-realistic)**, selected with one parameter.
+- Gerbers, drill files, ODB++, STEP, BoM (CSV, HTML, interactive HTML,
+  XLSX with costs), pick and place, testpoint lists, ERC/DRC reports.
+- **Automated README.md**, **KiRI** visual diff between commits and a
+  **web page** to browse all the outputs.
+- **Same pipeline locally and in CI**: `kibot_launch.sh` runs inside the
+  `ghcr.io/inti-cmnb/kicad10_auto_full` image in both cases.
+- **Releases**: pushing a semantic version tag generates the `RELEASED`
+  documents, updates `CHANGELOG.md` and creates a GitHub release with assets.
+
+## OUTPUTS PER PROJECT STATUS
+
+The project status (KiBot *variant*) selects the generated outputs:
+
+| Output | DRAFT | PRELIMINARY | CHECKED | RELEASED |
+| --- | :---: | :---: | :---: | :---: |
+| Schematic PDF (`Schematic/`) | ✅ | ✅ | ✅ | ✅ |
+| Netlist, BoM CSV + HTML | ✅ | ✅ | ✅ | ✅ |
+| README.md | ✅ | ✅ | ✅ | ✅ |
+| PCB routing PDF (`PCB/`) | | ✅ | ✅ | ✅ |
+| Gerbers PDF (`Manufacturing/Fabrication/`) | | ✅ | ✅ | ✅ |
+| Fabrication PDF + notes, Gerbers, drill, ODB++, ZIP | | ✅ | ✅ | ✅ |
+| Assembly PDF + notes, pick and place, interactive BoM | | ✅ | ✅ | ✅ |
+| 3D renders PNG (`Images/`), STEP (`3D/`) | | ✅ | ✅ | ✅ |
+| Testpoint lists (`Testing/`) | | ✅ | ✅ | ✅ |
+| KiRI diff viewer, HTML navigation page | | ✅ | ✅ | ✅ |
+| ERC / DRC reports (`Reports/`) | | | ✅ | ✅ |
+| GitHub release with assets | | | | ✅ (tag) |
+
+- **DRAFT**: schematic in progress.
+- **PRELIMINARY**: schematic and PCB documents, no ERC/DRC.
+- **CHECKED**: schematic and PCB documents, with ERC/DRC.
+- **RELEASED**: like CHECKED. Selected automatically in CI when a tag is pushed.
+- Any other name is an **assembly variant**: run like RELEASED, outputs in
+  `Variants/` (define it in the `variants:` section of `kibot_main.yaml`).
+
+## GETTING STARTED
+
+1. Copy (or clone) this template in your KiCad templates folder:
+
+   - **Windows**: `%APPDATA%\kicad\10.0\template` (user templates) or
+     `C:\Program Files\KiCad\10.0\share\kicad\template`
+   - **Linux**: `~/.local/share/kicad/10.0/template`
+   - **macOS**: `~/Documents/KiCad/10.0/template`
+
+2. Install the fonts of [`kibot_resources/fonts`](../kibot_resources/fonts) on
+   your system and copy the color theme
+   [`kibot_resources/colors/Altium_Theme.json`](../kibot_resources/colors/Altium_Theme.json)
+   in your KiCad `colors` folder (`%APPDATA%\kicad\10.0\colors` on Windows,
+   `~/.config/kicad/10.0/colors` on Linux). KiBot installs them automatically
+   in the container, this step is only for the KiCad GUI.
+
+3. In KiCad: **File → New Project From Template** and select this template.
+
+   > [!CAUTION]
+   > KiCad may not copy the hidden `.github` folder (and `.gitignore`,
+   > `.gitattributes`) when creating a project from a template, mostly on
+   > Linux. Copy them manually if they are missing.
+
+4. Create the git repository and the working branch:
+
+   ```
+   git init -b main
+   git add -A && git commit -m "Initial commit"
+   git checkout -b dev
+   ```
+
+5. Edit the metadata in the `definitions:` section at the end of
+   [`kibot_yaml/kibot_main.yaml`](../kibot_yaml/kibot_main.yaml)
+   (`PROJECT_NAME`, `BOARD_NAME`, `COMPANY`, `DESIGNER`, `LOGO`, `GIT_URL`...).
+
+6. Edit the report templates in
+   [`kibot_resources/templates`](../kibot_resources/templates): fabrication and
+   assembly notes, impedance table and README template.
+
+7. Choose the stackup (see [Stackup and design rules](#stackup-and-design-rules-jlcpcb),
+   JLCPCB 4 layers by default) and adapt the BoM columns
+   ([`kibot_out_csv_bom.yaml`](../kibot_yaml/kibot_out_csv_bom.yaml),
+   [`kibot_out_html_bom.yaml`](../kibot_yaml/kibot_out_html_bom.yaml),
+   [`kibot_out_xlsx_bom.yaml`](../kibot_yaml/kibot_out_xlsx_bom.yaml)) to the
+   symbol fields you use.
+
+8. Set the project status in [`kibot_settings.yaml`](../kibot_settings.yaml)
+   and generate the outputs locally (`./run_kibot.sh`, `.\run_kibot.ps1`) or
+   push to GitHub.
+
+## CONFIGURATION
+
+All the parameters are in YAML files, the scripts and the workflow don't need
+to be modified.
+
+### Pipeline settings: `kibot_settings.yaml`
+
+Read by the local runners and by the GitHub workflow:
+
+```yaml
+variant: DRAFT          # DRAFT | PRELIMINARY | CHECKED | RELEASED | <assembly variant>
+docker_image: ghcr.io/inti-cmnb/kicad10_auto_full:1.9.1-1_k10.0.5_d13.2_b4.2.4LTS
+commit_outputs: true    # CI: commit the outputs to the repository
+ci_render_engine: kicad # CI: 3D render engine (kicad | blender)
+lib_KEJLABS_LIB_url: https://github.com/kejlabs/kicad-libs.git   # shared libraries (optional)
+```
+
+Keep the simple `key: value` format, the file is also parsed by shell scripts.
+Pin the docker image to a precise tag for reproducible documents
+([available tags](https://github.com/INTI-CMNB/kicad_auto/pkgs/container/kicad10_auto_full)).
+
+### KiBot parameters: `kibot_yaml/kibot_main.yaml`
+
+The `definitions:` section at the end of `kibot_main.yaml` holds the KiBot
+parameters. They are passed to the imported `kibot_out_*.yaml`,
+`kibot_pre_*.yaml` and `kibot_filt_*.yaml` files, which don't need to be
+edited for normal use. The main groups:
+
+| Definitions | Purpose |
+| --- | --- |
+| `PROJECT_NAME`, `BOARD_NAME`, `COMPANY`, `DESIGNER`, `LOGO`, `GIT_URL` | Metadata, used as text variables in the documents |
+| `CHECK_ZONE_FILLS`, `STACKUP_TABLE_NOTE` | Preflights (DRC, stackup drawing) |
+| `MPN_FIELD`, `MAN_FIELD` | Symbol fields for the manufacturer part number and manufacturer |
+| `GROUP_ROUND_SLOTS`, `GROUP_PTH_NPTH`, `GROUP_PTH_NPTH_DRL` | Drill tables and files |
+| `PLOT_REFS` | Reference designators in the Gerbers |
+| `COLOR_THEME`, `SHEET_WKS`, `*_SCALING` | PDF documents (0 = fit the page) |
+| `GERBERS_PDF_MONOCHROME` | Gerbers PDF in gray scale instead of colors (layer colors: `COLOR_*` in `kibot_out_pdf_gerbers.yaml`) |
+| `RENDER_ENGINE`, `3D_RESOLUTION`, `KICAD_3D_*`, `BLENDER_*` | 3D renders |
+| `KIRI_MAX_COMMITS` | Number of commits in the KiRI diff viewer |
+| `*_DIR` | Output directories |
+| `LAYER_*` | Names of the user layers of the PCB |
+| `*_OUTPUT` | Output names, also used in the `kibot_image_*` / `kibot_table_*` PCB groups |
+
+Any definition can be overridden from the command line of KiBot with
+`-E NAME=value`, i.e. `./run_kibot.sh -- -E BOARD_NAME=Test`.
+
+### Stackup and design rules (JLCPCB)
+
+The template targets **JLCPCB**, 1 oz outer / 0.5 oz inner copper, without
+extra cost options:
+
+- [`KiCad10_KiBot_Template.kicad_dru`](../KiCad10_KiBot_Template.kicad_dru) and
+  *Board Setup → Constraints*: JLCPCB multilayer capabilities (0.09 mm
+  track/space, vias 0.2 mm hole / 0.45 mm pad minimum, 0.6/0.3 mm by default,
+  0.3 mm copper to edge...). They are the same for 4 and 6 layers.
+- Stackup: **JLC04161H-7628** (4 layers, 1.6 mm, JLCPCB default).
+
+Switch the number of layers and the stackup with a profile of
+[`kibot_resources/stackups`](../kibot_resources/stackups) (close the board in
+KiCad first):
+
+```
+./run_kibot.sh --stackup list        # available profiles
+./run_kibot.sh --stackup jlcpcb_6l   # JLC06161H-3313, 6 layers
+./run_kibot.sh --stackup jlcpcb_4l   # back to JLC04161H-7628, 4 layers
+```
+
+The profile sets the copper layer count, the copper layer names and types
+(`L1 (Sig)`, `L2 (GND)`...), the physical stackup (thicknesses, materials,
+dielectric constants), the finish (HASL lead-free) and the colors. The
+fabrication document, stackup table, Gerbers and drill files follow
+automatically. Removing layers that still hold copper is refused (`--force` to
+override). Add a profile for another stackup or manufacturer by copying one of
+the YAML files. Update the impedance table template
+(`kibot_resources/templates/impedance_table.txt`) with your stackup (JLCPCB
+[impedance calculator](https://jlcpcb.com/pcb-impedance-calculator)).
+
+### 3D renders: KiCad or Blender
+
+The PNG renders (`Images/*-top.png`, `-bottom.png`, `-angled_top.png`,
+`-angled_bottom.png`) are embedded in the assembly document, the schematic and
+the README. Two engines are available, with the same output names:
+
+| `RENDER_ENGINE` | Tool | Speed | Result |
+| --- | --- | --- | --- |
+| `kicad` (default) | KiCad 3D viewer (`kicad-cli pcb render`) | ~10 s per view | Like the KiCad 3D viewer |
+| `blender` | Blender + [pcb2blender](https://github.com/30350n/pcb2blender) | minutes per view (CPU) | Photo-realistic |
+
+Locally, select it in `kibot_main.yaml`, or for one run:
+
+```
+./run_kibot.sh -v CHECKED -r blender
+```
+
+Blender runs inside the docker image, on the CPU (KiBot doesn't use the GPU),
+with all the CPUs given to Docker. Measured for one view (2000 px, 50 samples):
+
+| Where | Per view | 4 views |
+| --- | --- | --- |
+| Local PC, 16 CPUs | ~2 min 15 s | ~9 min |
+| GitHub runner, public repository (4 CPUs) | ~7 min | ~27 min |
+| GitHub runner, private repository (2 CPUs) | ~14 min | ~55 min |
+
+That's why **the CI always uses the engine of `ci_render_engine`** in
+`kibot_settings.yaml` (`kicad` by default), whatever `RENDER_ENGINE` says.
+Render with Blender locally when you need photo-realistic images (a manual run
+of the workflow can still choose `blender`). Note that with
+`commit_outputs: true` the next CI run replaces committed Blender renders by
+KiCad ones: keep Blender renders for local use, or copy them elsewhere.
+
+Parameters:
+
+- `3D_RESOLUTION`: image size in pixels.
+- `KICAD_3D_ROT_X/Y`: angled views for the KiCad engine, in degrees.
+  Avoid rotations around Z: the KiCad renderer can't zoom out, a rotated
+  board would be clipped. `KICAD_3D_RAYTRACING`: ray tracing (adds a floor
+  shadow around the board).
+- `BLENDER_3D_ROT_X/Y/Z`, `BLENDER_3D_ROT_Z_BOTTOM`: angled views for Blender.
+  `BLENDER_SAMPLES`: 10 for a draft, 100+ for the final render. The board is
+  exported once to `3D/<project>.pcb3d`, which can also be opened in Blender.
+
+The 3D models referenced by the footprints are downloaded by KiBot when
+missing, and cached (docker volume `kibot_3d_models_cache` locally, GitHub
+cache in CI).
+
+### Shared libraries (symbols, footprints, 3D models)
+
+- **Symbols and footprints** need nothing: KiCad stores a copy of them in the
+  schematic and the PCB, KiBot uses these copies. (DRC/ERC may only report
+  non blocking "library mismatch" warnings if the libraries are missing.)
+- **KiCad stock 3D models** (`${KICAD10_3DMODEL_DIR}`...) are downloaded by
+  KiBot and cached.
+- **3D models of your own libraries** must be reachable in the container.
+  Use one of these methods:
+
+**1. Library repository as a git submodule (recommended).** Declare each
+library in `kibot_settings.yaml`, `<VAR>` being the KiCad path variable used
+by its footprints (3D models referenced as `${VAR}/...`):
+
+```yaml
+lib_KEJLABS_LIB_url: https://github.com/kejlabs/kicad-libs.git   # git URL (https)
+lib_KEJLABS_LIB_path: lib/kejlabs-kicad-libs                      # optional, default lib/<repository name>
+lib_KEJLABS_LIB_branch: main                                      # optional, default branch of the repository
+```
+
+Several libraries: one block per variable (`lib_OTHER_LIB_url`...). Then:
+
+```
+./run_kibot.sh --setup-libs      # adds/updates the git submodules from the settings
+git add .gitmodules lib && git commit -m "Add libraries"
+```
+
+| Command | Effect |
+| --- | --- |
+| `--setup-libs` | Adds the missing libraries as submodules, applies URL/branch changes, checks out the recorded versions |
+| `--update-libs` | Moves the libraries to the latest commit of their branch (commit the change to use it in CI) |
+| `--check-libs` | Fails if a declared library is missing (used by the CI) |
+
+(Same options for `.un_kibot.ps1`, except `--check-libs`.)
+
+- The project records the exact commit of each library: an old release is
+  always regenerated with the library version it was designed with.
+- The runners and the CI define `${VAR}` in the container, pointing to the
+  library folder. On your PC, define the same variable in KiCad
+  (**Preferences → Configure Paths**), pointing to the submodule folder or to
+  your usual copy of the library.
+- Clone projects with `git clone --recurse-submodules`, or run
+  `git submodule update --init --recursive` after a pull (the runners warn
+  when a library folder is empty).
+- **Private library repository**: create a fine-grained token with *Contents:
+  read-only* access to the library repository and store it as the
+  `KICAD_LIBS_TOKEN` secret of the project repository (**Settings → Secrets
+  and variables → Actions**). The workflow uses it only to fetch the
+  submodules; the outputs are still pushed with the default `GITHUB_TOKEN`.
+  Public libraries don't need it.
+- The CI fails early with an explicit message if a declared library is not a
+  submodule of the project (`--setup-libs` not run or not committed).
+- KiRI (diff between commits) also works with submodules: the launcher makes
+  git fetch them from the local copy, no network needed.
+- A library already copied in the project (not a submodule) only needs
+  `lib_<VAR>_path` to define `${VAR}`.
+
+**2. Models relative to the project.** Libraries copied inside the project
+(i.e. `lib/`) and models referenced as `${KIPRJMOD}/lib/3d/part.step` work
+without configuration.
+
+**3. Embedded 3D models.** KiCad 10 can embed the 3D models in the footprints
+of the board (footprint properties → *3D Models* → embed). The board becomes
+self-contained, at the cost of a bigger `.kicad_pcb`.
+
+When a model can't be found, the render is generated without it and KiBot
+reports `Missing 3D model for <ref>` (W047) and an error.
+## RUNNING LOCALLY (DOCKER)
+
+Install and start [Docker Desktop](https://docs.docker.com/desktop/) (or the
+docker engine on Linux). The runners pull the image from
+`kibot_settings.yaml` (~5 GB the first time), mount the project in the
+container and run [`kibot_launch.sh`](../kibot_launch.sh), exactly like the
+CI.
+
+| Linux / macOS / WSL / Git Bash | Windows PowerShell |
+| --- | --- |
+| `./run_kibot.sh` | `.\run_kibot.ps1` |
+
+```
+./run_kibot.sh                        Variant from kibot_settings.yaml
+./run_kibot.sh -v DRAFT               Schematic PDF, netlist and BoM
+./run_kibot.sh -v CHECKED -r blender  Everything, ERC/DRC, Blender renders
+./run_kibot.sh -v EXAMPLE             Assembly variant, outputs in Variants/
+./run_kibot.sh --version 1.2.0        Force the revision printed in the documents
+./run_kibot.sh --log-dir kibot_logs   Keep the KiBot debug logs
+./run_kibot.sh --costs                XLSX BoM with costs (KiCost)
+./run_kibot.sh --help                 All the options
+./run_kibot.sh --serve [PORT]         Browse the outputs on http://localhost:8000
+./run_kibot.sh --shell                Interactive shell in the container
+```
+
+(same arguments for `.\run_kibot.ps1`). Everything after `--` is passed to
+KiBot. If KiCad 10 and KiBot are installed natively, `./kibot_launch.sh` can
+be used directly with the same options.
+
+Environment variables of the runners:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `KIBOT_IMAGE` | `docker_image` of `kibot_settings.yaml` | Use another image |
+| `KIBOT_3D_CACHE_DIR` | docker volume `kibot_3d_models_cache` | Host directory for the 3D models cache (used by the CI) |
+| `KIBOT_PROJECT_HOST_DIR` | project directory | Project path seen by the docker daemon, for nested docker setups ([act](https://github.com/nektos/act), dev containers) |
+
+The runners never modify the `.kicad_pcb` / `.kicad_sch` files: KiBot saves
+them while working, `kibot_launch.sh` restores them at the end (uncommitted
+changes included). The text variables of the `.kicad_pro` are updated on
+purpose, so the KiCad GUI shows the same values as the documents.
+
+> [!WARNING]
+> Outputs generated locally can conflict with the ones committed by the CI.
+> Either don't commit local outputs, or set `commit_outputs: false`.
+
+### Calculating board costs (KiCost)
+
+Copy [`kibot_yaml/kicost_config_local_template.yaml`](../kibot_yaml/kicost_config_local_template.yaml)
+to `kibot_yaml/kicost_config_local.yaml` (ignored by git), fill in the API
+keys of the distributors and run `./run_kibot.sh --costs`. The spreadsheet is
+created in `Manufacturing/Assembly`. KiCost expects particular field names: the
+fields set in `MPN_FIELD` and `MAN_FIELD` are renamed during the run.
+
+## CI/CD ON GITHUB ACTIONS
+
+The workflow [`.github/workflows/ci.yaml`](../.github/workflows/ci.yaml) runs
+`./run_kibot.sh` on an `ubuntu-latest` runner: exactly the same command, docker
+image and script as a local run. The 3D models are cached between runs.
+
+> [!IMPORTANT]
+> Allow the workflow to push: **Settings → Actions → General → Workflow
+> permissions → Read and write permissions**.
+
+| Event | Variant | Result |
+| --- | --- | --- |
+| Push on `main` or `dev` | `variant` of `kibot_settings.yaml` | Outputs committed on the branch (`[skip ci]`) |
+| Push of a tag `x.y.z` | `RELEASED` | `CHANGELOG.md` updated, outputs committed on `main`, GitHub release with assets |
+| Manual run (Actions tab) | Choice (or settings) | Same as a push, the render engine can be chosen too |
+
+The 3D renders use `ci_render_engine` (`kicad` by default, see
+[3D renders](#3d-renders-kicad-or-blender)). Library submodules are fetched
+automatically (`KICAD_LIBS_TOKEN` secret for private ones, see
+[Shared libraries](#shared-libraries-symbols-footprints-3d-models)).
+
+The logs and the outputs are always available as workflow artifacts
+(`kibot_logs`, `kibot_outputs_<VARIANT>`), even with `commit_outputs: false`.
+Pushes that only modify Markdown files don't trigger the workflow, nor do
+merge commits of pull requests (the outputs were generated on the source
+branch).
+
+### Testing the workflow locally
+
+The workflow can be run locally with [act](https://github.com/nektos/act)
+(`gh extension install nektos/gh-act`), in Git Bash / Linux:
+
+```
+gh act workflow_dispatch --input variant=CHECKED \
+  -P ubuntu-latest=catthehacker/ubuntu:act-latest --bind \
+  --env KIBOT_PROJECT_HOST_DIR="$(pwd)" -s GITHUB_TOKEN="$(gh auth token)"
+```
+
+act's artifact server doesn't support `actions/upload-artifact@v7`: switch
+to v4 for local tests. The commit steps really push to `origin`.
+
+### Workflow and semantic versioning
+
+- Work on the `dev` branch, `main` receives pull requests and releases.
+- Record the changes under `## [Unreleased]` in [`CHANGELOG.md`](../CHANGELOG.md),
+  following [semantic versioning for hardware](https://www.maskset.net/blog/2023/02/26/semantic-versioning-for-hardware/).
+- Push: the outputs are generated and committed. Pull them back
+  (`git pull`) before working again. Avoid modifying the `.kicad_pro` file
+  before pulling: KiBot updates its text variables.
+- To synchronise the revision history sheet of the schematic with
+  `CHANGELOG.md`, add the text variables of each version in
+  [`kibot_pre_set_text_variables.yaml`](../kibot_yaml/kibot_pre_set_text_variables.yaml)
+  and use them in the text boxes of the *Revision History* sheet:
+
+  ```yaml
+  - variable: '@RELEASE_TITLE_VAR@1.0.0'
+    command: '@GET_TITLE_CMD@ 1.0.0'
+  - variable: '@RELEASE_BODY_VAR@1.0.0'
+    command: '@GET_BODY_CMD@ 1.0.0'
+  ```
+
+- Release: merge `dev` into `main` (pull request), then tag `main`:
+
+  ```
+  git checkout main && git pull
+  git tag 1.0.0
+  git push origin 1.0.0
+  ```
+
+  The `[Unreleased]` section becomes `[1.0.0] - <date>`, the `RELEASED`
+  documents are generated with revision `1.0.0` and committed on `main`, and
+  a GitHub release is created with the PDFs, fabrication ZIP, BoM, pick and
+  place, STEP and renders.
+
+- After a release: `git pull` on `main`, then `git checkout dev && git rebase main`.
+
+## PROJECT CONVERSION GUIDE
+
+To use this pipeline with an existing KiCad 10 project, copy `kibot_yaml/`,
+`kibot_resources/`, `Templates/`, `.github/`, `kibot_launch.sh`,
+`run_kibot.*`, `kibot_settings.yaml`, `CHANGELOG.md`, `.gitignore` and
+`.gitattributes`, then set up the schematic and the PCB as described below.
+Older KiCad files can be converted with `kicad-cli sch upgrade` /
+`kicad-cli pcb upgrade` (available in the container: `./run_kibot.sh --shell`).
+
+### Schematic
+
+- **File → Page Settings → Drawing Sheet**: `Templates/Template_GIT.kicad_wks`.
+  Set `Revision` to `${REVISION}` and `Company` to `${COMPANY}`, export to all
+  sheets.
+- Table of contents: the `${SHEET_NAME_<N>}` text variables are replaced by
+  the name of sheet N (up to 40, see `kibot_pre_set_text_variables.yaml`).
+- `${VARIANT}` is replaced by the project status, `${RELEASE_DATE}` and
+  `${RELEASE_DATE_NUM}` by the date of the last commit (`17-Dec-2024`,
+  `2024-12-17`), `${GIT_HASH_SCH}` / `${GIT_HASH_PCB}` by the last commit of
+  the files.
+- Images: a text box named `kibot_image_<output>` is replaced by the image of
+  that output, i.e. `kibot_image_png_3d_viewer_angled_top`.
+
+### PCB
+
+The user layer names must match the `LAYER_*` definitions
+(**File → Board Setup → Board Stackup → Board Editor Layers**). Named groups
+(**Right-Click → Grouping → Group Items**, then **E** to rename) mark where
+KiBot draws tables and images; their size and position set the size and
+position of the element.
+
+| Layer | Description | Items |
+| --- | --- | --- |
+| **TitlePage** | First page of the assembly document | Groups `kibot_image_png_3d_viewer_angled_top` and `kibot_image_png_3d_viewer_angled_bottom` |
+| **User.Comments** | Free for the project | |
+| **F.DNP / B.DNP** | Red crosses on *Do Not Populate* parts | Keep empty |
+| **DrillMap** | Drill drawings and tables of the fabrication document | Group `kibot_table_csv_drill_table` |
+| **F.TestPoint / B.TestPoint** | Testpoint highlighting | Keep empty |
+| **F.AssemblyText** | Component count, assembly notes, top 3D render | Groups `kibot_table_csv_comp_count`, `kibot_image_png_3d_viewer_top`, text `${ASSEMBLY_NOTES}` |
+| **B.AssemblyText** | Bottom 3D render | Group `kibot_image_png_3d_viewer_bottom` |
+| **F.Dimensions** | Stackup, impedance table, fabrication notes, dimensions | Groups `kibot_fancy_stackup`, `kibot_table_csv_impedance_table`, text `${FABRICATION_NOTES}` |
+| **B.Dimensions** | Dimensions seen from the bottom | KiCad dimension tool |
+| **F.TestPointList** | Top testpoint table | Group `kibot_table_csv_testpoints_top` (slicing allowed: `[:32]`, `[32:]`) |
+| **B.TestPointList** | Bottom testpoint table (printed mirrored) | Group `kibot_table_csv_testpoints_bottom` |
+
+Testpoint coordinates are relative to the drill/place origin
+(**Place → Drill/Place File Origin**), usually the bottom left corner of the
+board. Testpoints are the symbols with a `TP` reference.
+
+## DIRECTORY STRUCTURE
+
+```
+├─ .github/workflows  # GitHub Actions workflow
+├─ 3D                 # STEP / PCB3D models (generated)
+├─ Computations       # Misc calculations (optional)
+├─ docs               # This guide
+├─ HTML               # Web page to browse the outputs (generated)
+├─ Images             # Pictures and 3D renders
+├─ kibot_resources
+│  ├─ colors          # Color theme, installed by KiBot
+│  ├─ fonts           # Fonts, installed by KiBot
+│  ├─ scripts         # Scripts used by the text variables
+│  └─ templates       # Templates of the generated reports (notes, README...)
+├─ kibot_yaml         # KiBot configuration
+├─ KiRI               # KiRI diff viewer (generated)
+├─ Logos              # Logos (optional)
+├─ Manufacturing
+│  ├─ Assembly        # Assembly PDF, BoM, pick and place, notes
+│  └─ Fabrication     # Fabrication PDF, Gerbers PDF, ZIP, ODB++, notes
+│     ├─ Drill Tables
+│     └─ Gerbers
+├─ PCB                # PCB routing PDF (generated)
+├─ Reports            # ERC/DRC reports (generated)
+├─ Schematic          # Schematic PDF (generated)
+├─ Templates          # Drawing sheets
+├─ Testing/Testpoints # Testpoint lists (generated)
+├─ Variants           # Outputs of the assembly variants (generated)
+├─ kibot_launch.sh    # Runs KiBot (in the container, locally and in CI)
+├─ kibot_settings.yaml# Pipeline settings
+├─ run_kibot.sh       # Local runner (Linux/macOS/WSL/Git Bash)
+└─ run_kibot.ps1      # Local runner (Windows PowerShell)
+```
+
+## TROUBLESHOOTING
+
+- **PRELIMINARY/CHECKED fails on the empty template**: the template board has
+  no outline, no component and no hole, so the interactive BoM, the drill
+  table (and the fabrication document using it) and the STEP can't be
+  generated. Use `DRAFT` until the board has an outline and components.
+- **A failing output**: KiBot continues with the other outputs
+  (`--dont-stop`) but the run returns an error. Look for `ERROR` in the
+  console or in the logs (`--log-dir`, `kibot_logs` artifact in CI).
+- **ERC/DRC errors** in CHECKED/RELEASED: see `Reports/`. The DRC doesn't stop
+  the generation, the ERC does.
+- **Clipped KiCad 3D render**: reduce `KICAD_3D_ROT_*`, don't rotate around Z.
+- **Blender is slow**: reduce `BLENDER_SAMPLES` / `3D_RESOLUTION`, or use it
+  only for releases (manual run with the *blender* render engine).
+- **Scripts fail with `\r` errors**: the shell scripts must have LF line
+  endings, enforced by `.gitattributes`. Re-checkout them if needed.
+- **Files owned by root on Linux**: `run_kibot.sh` gives them back to your
+  user at the end of the run.
+
+## DIFFERENCES WITH KDT_HIERARCHICAL_KIBOT
+
+- KiCad 10 files and image (`kicad10_auto_full`), single `all_group` (ODB++
+  always generated).
+- JLCPCB design rules and stackup profiles (4/6 layers) instead of PCBWay 6 layers.
+- New outputs: **Gerbers PDF** (`pdf_gerbers`) and **PCB routing PDF**
+  (`pdf_pcb_routing`).
+- **Render engine parameter** (`RENDER_ENGINE: kicad | blender`), with a
+  single PCB3D export shared by the Blender renders.
+- **Same command locally and in CI**: the workflow runs `./run_kibot.sh`
+  (a non-interactive `docker run` of `kibot_launch.sh`) instead of the KiBot
+  GitHub action.
+- Pipeline settings (variant, image) in `kibot_settings.yaml` instead of the
+  workflow file; manual runs can override the variant and the render engine.
+- Release: CHANGELOG update, outputs and merge on `main` in a single push.
+- KiBot runs with `--dont-stop --fail-on-ignored`.
+
+## CREDITS
+
+- © 2026 [KejLabs](../LICENSE), MIT license.
+- [Vincent Nguyen](https://github.com/nguyen-v) for
+  [KDT_Hierarchical_KiBot](https://github.com/nguyen-v/KDT_Hierarchical_KiBot)
+  (MIT), the base of this template: project, drawing sheets, KiBot
+  configuration, scripts and documentation.
+- [Salvador E. Tropea (@set-soft)](https://github.com/set-soft) for
+  [KiBot](https://github.com/INTI-CMNB/KiBot) and the
+  [KiCad automation images](https://github.com/INTI-CMNB/kicad_auto).
+- [KiCost](https://github.com/hildogjr/KiCost), [KiRI](https://github.com/leoheck/kiri),
+  [pcb2blender](https://github.com/30350n/pcb2blender),
+  [InteractiveHtmlBom](https://github.com/openscopeproject/InteractiveHtmlBom).
