@@ -58,8 +58,6 @@ jobs:
   generate_outputs:
     name: Generate outputs
     runs-on: ubuntu-latest
-    # Outputs were already generated on the source branch of a merged PR
-    if: "!contains(github.event.head_commit.message, 'Merge pull request') || github.ref_type == 'tag'"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7

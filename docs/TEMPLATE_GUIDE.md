@@ -486,8 +486,8 @@ automatically (`KICAD_LIBS_TOKEN` secret for private ones, see
 The logs and the outputs are always available as workflow artifacts
 (`kibot_logs`, `kibot_outputs_<VARIANT>`).
 Pushes that only modify Markdown files (or empty commits) don't trigger the
-workflow, nor do merge commits of pull requests (the outputs were generated on
-the source branch): use a manual run to regenerate.
+workflow: use a manual run to regenerate. Merging a pull request runs the
+workflow on the target branch, so its outputs are up to date.
 
 ### Testing the workflow locally
 
