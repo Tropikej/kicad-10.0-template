@@ -222,7 +222,7 @@ boards milled on a desktop CNC ([below](#cnc-milling-makera-z1)):
 | `jlcpcb_2l` | JLC0216A, 2 layers | 1 oz | 1-2 layers: 0.10 mm track/space, vias 0.3/0.5 mm min., PTH annular ring 0.18 mm |
 | `jlcpcb_4l` (default) | JLC04161H-7628, 4 layers | 1 oz outer / 0.5 oz inner | multilayer: 0.09 mm track/space, vias 0.2/0.45 mm min. |
 | `jlcpcb_6l` | JLC06161H-3313, 6 layers | 1 oz outer / 0.5 oz inner | multilayer (same as 4 layers) |
-| `makera_z1_2l` | CNC milled FR4 1.5 mm, 2 layers | 1 oz | isolation 0.2 mm min. (0.3 mm net classes), vias 0.6/1.2 mm min., no plating |
+| `makera_z1_2l` | CNC milled FR4 1.5 mm, 2 layers | 1 oz | isolation 0.2 mm min. (0.3 mm net classes), vias 0.6/1.2 mm min., no plating, approximate impedance |
 
 Switch at any time, even in the middle of a project (close it in KiCad first,
 then commit the changes):
@@ -329,9 +329,32 @@ The profile also:
   mm vias (`netclass_minimums`), so the router places machinable copper. Values
   are only raised: switching back to a JLCPCB profile keeps them (valid,
   just larger), and it restores the impedance classes.
-- Removes the solder mask and silkscreen from the stackup, sets *No controlled
-  impedance* and CNC fabrication notes (tools, order of operations, copper
-  protection).
+- Removes the solder mask and silkscreen from the stackup, sets CNC
+  fabrication notes (tools, order of operations, copper protection).
+- Sets **approximate** impedance classes (below).
+
+Approximate impedance (not controlled): grounded coplanar lines on bare copper,
+0.3 mm milled gaps to the ground pour and between the pair, L2 as ground plane.
+
+| Net class | Track width | Gap (pair / ground) | Milling tolerance (±0.025 mm cut per side) |
+| --- | --- | --- | --- |
+| `50R` single-ended | 1.48 mm | - / 0.3 mm | 47 – 52 Ω |
+| `USB_90R` differential | 0.97 mm | 0.3 / 0.3 mm | 84 – 96 Ω |
+| `DIFF_100R` differential | 0.70 mm | 0.3 / 0.3 mm | 92 – 108 Ω |
+
+Nobody publishes the dielectric of the copper-clad blanks, so they are computed
+with [`coplanar_impedance.py`](../kibot_resources/scripts/coplanar_impedance.py),
+a 2D field solver of the cross-section (checked against the closed form and the
+JLCPCB calculator), for Dk 4.5 and a 0.05 mm groove cut into the FR4 by the
+V-bit. Dk 4.2 – 4.8 moves them by ±3 % and the groove depth (0 – 0.1 mm) by
+±4 %: count on about ±10 %, fine for USB 2.0 or short RF runs on a prototype.
+Measure the milled gap, keep the ground pour clearance at or below 0.3 mm,
+stitch the top pour to L2 with vias along the lines. For another blank, gap or
+bit (needs `pip install numpy scipy`, on the host):
+
+```
+python3 kibot_resources/scripts/coplanar_impedance.py --er 4.5 --h 1.43 --gap 0.3 --groove 0.05
+```
 
 Design for milling:
 
