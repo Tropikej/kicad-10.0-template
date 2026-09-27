@@ -7433,7 +7433,7 @@
 		(pts
 			(xy 130 100) (xy 130 70)
 		)
-		(height 4)
+		(height -4)
 		(format
 			(prefix "")
 			(suffix "")
@@ -7468,7 +7468,7 @@
 		(pts
 			(xy 130 70) (xy 170 70)
 		)
-		(height 4)
+		(height -4)
 		(format
 			(prefix "")
 			(suffix "")
@@ -7503,7 +7503,7 @@
 		(pts
 			(xy 130 100) (xy 130 70)
 		)
-		(height 4)
+		(height -4)
 		(format
 			(prefix "")
 			(suffix "")
@@ -7538,7 +7538,7 @@
 		(pts
 			(xy 130 70) (xy 170 70)
 		)
-		(height 4)
+		(height -4)
 		(format
 			(prefix "")
 			(suffix "")
