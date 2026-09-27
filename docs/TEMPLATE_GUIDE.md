@@ -37,7 +37,8 @@ definitions.
 - **KiCad 10** project (hierarchical schematic, custom drawing sheets) and
   KiBot 1.9 configuration.
 - **JLCPCB ready**: design rules, 4-layer stackup (JLC04161H-7628) with its
-  impedance table, switch to 6 layers (JLC06161H-3313) with one command, and
+  impedance table and impedance net classes, switch to 2 layers (JLC0216A) or
+  6 layers (JLC06161H-3313) with one command, and
   the JLCPCB order files: Gerbers ZIP, BoM with LCSC part numbers and pick and
   place with the JLCPCB rotation corrections.
 - **Starter board**: 40 × 30 mm outline, 4 mounting holes and a test point, so
@@ -210,48 +211,70 @@ Any definition can be overridden from the command line of KiBot with
 
 ### Stackup and design rules (JLCPCB)
 
-The template targets **JLCPCB**, 1 oz outer / 0.5 oz inner copper, without
-extra cost options:
+The template targets **JLCPCB** without extra cost options, with one profile
+per JLCPCB standard stackup (1.6 mm) in
+[`kibot_resources/stackups`](../kibot_resources/stackups):
 
-- [`KiCad10_KiBot_Template.kicad_dru`](../KiCad10_KiBot_Template.kicad_dru) and
-  *Board Setup → Constraints*: JLCPCB multilayer capabilities (0.09 mm
-  track/space, vias 0.2 mm hole / 0.45 mm pad minimum, 0.6/0.3 mm by default,
-  0.3 mm copper to edge...). They are the same for 4 and 6 layers.
-- Stackup: **JLC04161H-7628** (4 layers, 1.6 mm, JLCPCB default).
+| Profile | JLCPCB stackup | Copper | Design rules |
+| --- | --- | --- | --- |
+| `jlcpcb_2l` | JLC0216A, 2 layers | 1 oz | 1-2 layers: 0.10 mm track/space, vias 0.3/0.5 mm min., PTH annular ring 0.18 mm |
+| `jlcpcb_4l` (default) | JLC04161H-7628, 4 layers | 1 oz outer / 0.5 oz inner | multilayer: 0.09 mm track/space, vias 0.2/0.45 mm min. |
+| `jlcpcb_6l` | JLC06161H-3313, 6 layers | 1 oz outer / 0.5 oz inner | multilayer (same as 4 layers) |
 
-Switch the number of layers and the stackup with a profile of
-[`kibot_resources/stackups`](../kibot_resources/stackups) (close the board in
-KiCad first):
+Switch at any time, even in the middle of a project (close it in KiCad first,
+then commit the changes):
 
 ```
 ./run_kibot.sh --stackup list        # available profiles
+./run_kibot.sh --stackup jlcpcb_2l   # JLC0216A, 2 layers
 ./run_kibot.sh --stackup jlcpcb_6l   # JLC06161H-3313, 6 layers
 ./run_kibot.sh --stackup jlcpcb_4l   # back to JLC04161H-7628, 4 layers
 ```
 
-The profile sets the copper layer count, the copper layer names and types
-(`L1 (Sig)`, `L2 (GND)`...), the physical stackup (thicknesses, materials,
-dielectric constants), the finish (HASL lead-free) and the colors. The
-fabrication document, stackup table, Gerbers and drill files follow
-automatically. Removing layers that still hold copper is refused (`--force` to
-override). Add a profile for another stackup or manufacturer by copying one of
-the YAML files.
+A profile sets:
 
-The profile also writes the **impedance table** of the fabrication document
-(`kibot_resources/templates/impedance_table.txt`, `impedance:` entry of the
-profile). The values come from the JLCPCB
-[impedance calculator](https://jlcpcb.com/pcb-impedance-calculator), outer
-layers referenced to the adjacent plane, 0.2032 mm gap for the pairs:
+- **PCB**: copper layer count, layer names and types (`L1 (Sig)`,
+  `L2 (GND)`...), physical stackup (thicknesses, materials, dielectric
+  constants), finish (HASL lead-free), colors.
+- **Design rules**: *Board Setup → Constraints* minimums, the via sizes of the
+  *Track & Via* tool, and the `.kicad_dru` custom rules (from
+  `jlcpcb_2layer.kicad_dru` / `jlcpcb_multilayer.kicad_dru`). A `.kicad_dru`
+  you modified is kept (a warning tells you to compare it).
+- **Impedance net classes** `50R`, `USB_90R` and `DIFF_100R`, created or
+  updated with the widths/gaps of the stackup (your other net classes are not
+  touched). Assign them to your nets (*Board Setup → Net Classes*, or net class
+  labels in the schematic).
+- **Impedance table** of the fabrication document
+  (`kibot_resources/templates/impedance_table.txt`).
 
-| Impedance | JLC04161H-7628 (4 layers) | JLC06161H-3313 (6 layers) |
-| --- | --- | --- |
-| 50 Ω single-ended | 0.3586 mm | 0.1509 mm |
-| 90 Ω differential (USB) | 0.2906 mm | 0.1537 mm |
-| 100 Ω differential | 0.2258 mm | 0.1191 mm |
+The fabrication document, stackup table, Gerbers and drill files follow at the
+next run. Removing layers that still hold copper (i.e. 4 → 2 layers with inner
+planes) is refused, `--force` to override. Add a profile for another stackup or
+manufacturer by copying one of the YAML files.
 
-Keep only the lines you really use: they are requirements for the
-manufacturer. The table is printed when the board setup has *Impedance
-controlled* enabled (*Board Setup → Physical Stackup*).
+The impedance values come from the JLCPCB
+[impedance calculator](https://jlcpcb.com/pcb-impedance-calculator), pairs with
+a 0.2032 mm gap:
+
+| Net class | 2 layers (coplanar) | 4 layers (microstrip) | 6 layers (microstrip) |
+| --- | --- | --- | --- |
+| `50R` single-ended | 0.9182 mm | 0.3586 mm | 0.1509 mm |
+| `USB_90R` differential | 0.4625 mm | 0.2906 mm | 0.1537 mm |
+| `DIFF_100R` differential | 0.3058 mm | 0.2258 mm | 0.1191 mm |
+| Net class clearance | 0.2032 mm | 0.65 mm | 0.3 mm |
+
+- **4 and 6 layers**: microstrips on the outer layers, referenced to the
+  adjacent plane. The clearance (~3x the prepreg height) keeps the neighbouring
+  copper far enough not to change the impedance.
+- **2 layers**: with a 1.43 mm core a microstrip would be ~3 mm wide, so these
+  are **coplanar** lines: a ground pour at 0.2032 mm on the same layer, and the
+  bottom layer as ground reference. The net class clearance *is* that gap: set
+  the clearance of your ground zones at or below 0.2032 mm (*zone properties*)
+  so that the net class clearance applies.
+
+Keep only the lines of the impedance table you really use: they are
+requirements for the manufacturer. The table is printed when the board setup
+has *Impedance controlled* enabled (*Board Setup → Physical Stackup*).
 
 ### Manufacturing checks
 

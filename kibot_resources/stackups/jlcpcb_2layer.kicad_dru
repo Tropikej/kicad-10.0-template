@@ -1,23 +1,23 @@
 (version 1)
 # JLCPCB custom design rules for KiCad 10
-# 4 and 6 layers (same capabilities), 1 oz outer / 0.5 oz inner copper.
+# 2 layers (1-2 layers capabilities), 1 oz copper.
 # Values stay within the JLCPCB standard capabilities, without extra cost.
 # https://jlcpcb.com/capabilities/pcb-capabilities
-# Installed by: ./run_kibot.sh --stackup jlcpcb_4l | jlcpcb_6l
+# Installed by: ./run_kibot.sh --stackup jlcpcb_2l
 
 # ----------------------------------- Tracks ----------------------------------------------------------
 
 (rule "Track width and spacing"
-	(constraint track_width (min 0.09mm))
-	(constraint clearance (min 0.09mm))
+	(constraint track_width (min 0.1mm))
+	(constraint clearance (min 0.1mm))
 	(condition "A.Type == 'Track'"))
 
 # ----------------------------------- Vias ------------------------------------------------------------
 
-# No extra cost: 0.3 mm hole, or 0.2 mm hole with a diameter >= 0.45 mm
+# 1-2 layers: 0.3 mm hole / 0.5 mm diameter minimum
 (rule "Via hole and diameter"
-	(constraint hole_size (min 0.2mm))
-	(constraint via_diameter (min 0.45mm))
+	(constraint hole_size (min 0.3mm))
+	(constraint via_diameter (min 0.5mm))
 	(condition "A.Type == 'Via'"))
 
 (rule "Via hole to hole"
@@ -31,11 +31,12 @@
 # ----------------------------------- Holes and pads --------------------------------------------------
 
 (rule "Plated hole size"
-	(constraint hole_size (min 0.2mm) (max 6.3mm))
+	(constraint hole_size (min 0.3mm) (max 6.3mm))
 	(condition "A.Type == 'Pad' && A.isPlated()"))
 
+# 1 oz 2 layers: 0.18 mm minimum, 0.25 mm recommended
 (rule "Plated hole annular ring"
-	(constraint annular_width (min 0.15mm))
+	(constraint annular_width (min 0.18mm))
 	(condition "A.Type == 'Pad' && A.isPlated()"))
 
 (rule "Non-plated hole size"

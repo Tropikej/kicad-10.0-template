@@ -55,7 +55,7 @@ function display_help() {
     echo -e "  --log-dir DIR               Store the KiBot logs in DIR."
     echo -e "  --skip-checks               Don't run the manufacturing checks after the generation."
     echo -e "  --stackup NAME|list         Apply a stackup profile of kibot_resources/stackups to the PCB"
-    echo -e "                              (copper layers count, names and physical stackup) and exit."
+    echo -e "                              (copper layers, stackup, design rules, impedance net classes)."
     echo -e "                              Close the board in KiCad first. 'list' shows the profiles."
     echo -e "  --force                     With --stackup: remove copper layers even if they are used."
     echo -e "  --server [PORT]             Start an HTTP server to browse the outputs (default: 8000)."
@@ -80,7 +80,7 @@ function display_help() {
     echo -e "  ./kibot_launch.sh --costs                XLSX costs spreadsheet in Manufacturing/Assembly."
     echo -e "  ./kibot_launch.sh -v EXAMPLE             Assembly variant, outputs in Variants/."
     echo -e "  ./kibot_launch.sh --server 8080          Browse the outputs on http://localhost:8080."
-    echo -e "  ./kibot_launch.sh --stackup jlcpcb_6l    Switch the PCB to the JLCPCB 6 layers stackup."
+    echo -e "  ./kibot_launch.sh --stackup jlcpcb_2l    Switch to the JLCPCB 2 layers stackup, rules and net classes."
     echo
     echo -e "VARIANT DESCRIPTIONS"
     echo -e "  DRAFT:       only schematic in progress, generates schematic PDF, netlist and BoM"

@@ -1,22 +1,84 @@
 #!/usr/bin/env python3
 """
-Applies a stackup profile (kibot_resources/stackups/*.yaml) to a KiCad 10 PCB:
-number of copper layers, copper layer names/types and physical stackup
-(thicknesses, materials, dielectric constants, finish, colors).
+Applies a stackup profile (kibot_resources/stackups/*.yaml) to a KiCad 10
+project:
+- PCB: number of copper layers, copper layer names/types and physical stackup
+  (thicknesses, materials, dielectric constants, finish, colors)
+- project: impedance net classes, Board Setup minimums, via sizes, design
+  rules file (.kicad_dru, only if not customized)
+- impedance table of the fabrication document
 
 The KiCad Python API doesn't expose the stackup, so the .kicad_pcb file is
-edited as text. Close the board in KiCad before running it.
+edited as text. Close the project in KiCad before running it.
 
 Usage: set_stackup.py PROFILE.yaml [-b BOARD.kicad_pcb] [--force]
        set_stackup.py --list [-d STACKUPS_DIR]
 """
 import argparse
+import copy
+import filecmp
 import glob
+import json
 import os
 import re
+import shutil
 import sys
 
 import yaml
+
+NETCLASS_FIELDS = ('track_width', 'clearance', 'diff_pair_width', 'diff_pair_gap', 'diff_pair_via_gap', 'via_diameter',
+                   'via_drill')
+
+
+def update_project(pro_file, profile, profiles_dir):
+    """ Net classes, Board Setup rules and via sizes of the .kicad_pro """
+    with open(pro_file, encoding='utf-8') as f:
+        pro = json.load(f)
+    msgs = []
+    classes = pro.setdefault('net_settings', {}).setdefault('classes', [])
+    default = next((c for c in classes if c.get('name') == 'Default'), None)
+    for nc in profile.get('netclasses', []):
+        cur = next((c for c in classes if c.get('name') == nc['name']), None)
+        if cur is None:
+            cur = copy.deepcopy(default) if default else {}
+            cur['name'] = nc['name']
+            if 'priority' in cur or default is None:
+                used = [c.get('priority', 0) for c in classes if c.get('name') != 'Default']
+                cur['priority'] = max(used) + 1 if used else 0
+            classes.append(cur)
+            action = 'created'
+        else:
+            action = 'updated'
+        for k in NETCLASS_FIELDS:
+            if k in nc:
+                cur[k] = nc[k]
+        msgs.append('net class {} {} (width {} mm{})'.format(
+            nc['name'], action, nc.get('track_width'),
+            ', gap {} mm'.format(nc['diff_pair_gap']) if 'diff_pair_gap' in nc else ''))
+    ds = pro.setdefault('board', {}).setdefault('design_settings', {})
+    if profile.get('board_rules'):
+        ds.setdefault('rules', {}).update(profile['board_rules'])
+        msgs.append('Board Setup constraints updated')
+    if profile.get('via_sizes'):
+        ds['via_dimensions'] = [{'diameter': 0.0, 'drill': 0.0}] + [{'diameter': d, 'drill': h}
+                                                                   for d, h in profile['via_sizes']]
+        msgs.append('via sizes: ' + ', '.join('{}/{}'.format(d, h) for d, h in profile['via_sizes']))
+    with open(pro_file, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump(pro, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+    # Design rules: replace the project rules only if they are one of the profiles files (not customized)
+    rules = profile.get('design_rules')
+    if rules:
+        src = os.path.join(profiles_dir, rules)
+        dru = pro_file[:-len('.kicad_pro')] + '.kicad_dru'
+        known = [os.path.join(profiles_dir, f) for f in os.listdir(profiles_dir) if f.endswith('.kicad_dru')]
+        if not os.path.isfile(dru) or any(filecmp.cmp(dru, k, shallow=False) for k in known):
+            shutil.copyfile(src, dru)
+            msgs.append('design rules: {}'.format(rules))
+        elif not filecmp.cmp(dru, src, shallow=False):
+            msgs.append('WARNING: {} was customized, kept it. Compare it with {}'.format(
+                os.path.basename(dru), src))
+    return msgs
 
 COPPER_RE = re.compile(r'^(F|B|In\d+)\.Cu$')
 
@@ -180,13 +242,20 @@ def main():
     # Impedance table of the fabrication document
     rows = profile.get('impedance')
     if rows:
-        lines = ['Transmission Line, Impedance [ohms], Tolerance, Layer, Trace Width [mm], Gap [mm], Ref. Layers']
+        lines = ['Transmission Line, Impedance [ohms], Tolerance, Layer, Trace Width [mm], Gap [mm], Gap to GND [mm], '
+                 'Ref. Layers']
         for r in rows:
             lines.append(', '.join(str(r.get(k, '-')) for k in ('line', 'impedance', 'tolerance', 'layer', 'width',
-                                                                 'gap', 'ref')))
+                                                                 'gap', 'gnd_gap', 'ref')))
         with open(args.impedance_table, 'w', encoding='utf-8', newline='\n') as f:
             f.write('\n'.join(lines) + '\n')
         print('{}: impedance table for {}'.format(args.impedance_table, profile.get('name', profile_file)))
+
+    # Project: net classes, Board Setup rules, via sizes, design rules
+    pro_file = board[:-len('.kicad_pcb')] + '.kicad_pro'
+    if os.path.isfile(pro_file):
+        for msg in update_project(pro_file, profile, os.path.dirname(os.path.abspath(profile_file))):
+            print('{}: {}'.format(pro_file, msg))
     return 0
 
 

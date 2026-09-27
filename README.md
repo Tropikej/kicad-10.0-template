@@ -50,7 +50,7 @@ same YAML definitions.
 | --- | --- |
 | [`kibot_settings.yaml`](kibot_settings.yaml) | Project status, docker image, CI outputs publishing / pull request checks / render engine, shared libraries (git submodules) |
 | [`kibot_yaml/kibot_main.yaml`](kibot_yaml/kibot_main.yaml) | KiBot parameters (`definitions:`): metadata, 3D render engine, directories, layers... |
-| [`kibot_resources/stackups`](kibot_resources/stackups) | JLCPCB 4 layers (default) / 6 layers stackups: `./run_kibot.sh --stackup jlcpcb_6l` |
+| [`kibot_resources/stackups`](kibot_resources/stackups) | JLCPCB 2 / 4 (default) / 6 layers stackups, design rules and impedance net classes: `./run_kibot.sh --stackup jlcpcb_2l` |
 | [`kibot_resources/templates`](kibot_resources/templates) | Fabrication/assembly notes, impedance table, README template |
 | [`CHANGELOG.md`](CHANGELOG.md) | Revision history, synchronised with the schematic and the releases |
 
