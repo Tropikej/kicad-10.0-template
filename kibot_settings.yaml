@@ -21,9 +21,18 @@ variant: DRAFT
 # reproducible builds. Tags: https://github.com/INTI-CMNB/kicad_auto/pkgs/container/kicad10_auto_full
 docker_image: ghcr.io/inti-cmnb/kicad10_auto_full:1.9.1-1_k10.0.5_d13.2_b4.2.4LTS
 
-# CI only: commit the generated outputs back to the repository (true/false).
-# When false, the outputs are only available as a workflow artifact.
-commit_outputs: true
+# CI only: where the generated outputs go (they are always available as
+# workflow artifacts too):
+#   branch : snapshot (project + outputs) force-pushed to the branch
+#            kibot-outputs/<branch>, so the history of your branches doesn't
+#            grow with the outputs. Releases (tags) still commit them on main.
+#   commit : committed on the branch itself at each run
+#   none   : artifacts only (releases still commit them on main)
+ci_outputs: branch
+
+# CI only: project status used to check the pull requests (ERC/DRC need
+# CHECKED). Nothing is committed for a pull request.
+pr_variant: CHECKED
 
 # CI only: 3D render engine (kicad | blender). Blender is slow on the GitHub
 # runners (~7 min per view with 4 CPUs): keep kicad and render with Blender

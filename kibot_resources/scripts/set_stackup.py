@@ -114,6 +114,8 @@ def main():
     parser.add_argument('-d', '--dir', default='kibot_resources/stackups', help='Stackup profiles dir')
     parser.add_argument('--force', action='store_true', help='Remove copper layers even if they are used')
     parser.add_argument('--list', action='store_true', help='List the available profiles')
+    parser.add_argument('--impedance-table', default='kibot_resources/templates/impedance_table.txt',
+                        help='Impedance table written from the profile (`impedance` entry)')
     args = parser.parse_args()
 
     if args.list or not args.profile:
@@ -174,6 +176,17 @@ def main():
         f.write(text)
     print('{}: applied {} ({}, {} copper layers, {} mm)'.format(board, profile.get('name', profile_file),
                                                                profile.get('description', ''), n, fmt(round(thickness, 3))))
+
+    # Impedance table of the fabrication document
+    rows = profile.get('impedance')
+    if rows:
+        lines = ['Transmission Line, Impedance [ohms], Tolerance, Layer, Trace Width [mm], Gap [mm], Ref. Layers']
+        for r in rows:
+            lines.append(', '.join(str(r.get(k, '-')) for k in ('line', 'impedance', 'tolerance', 'layer', 'width',
+                                                                 'gap', 'ref')))
+        with open(args.impedance_table, 'w', encoding='utf-8', newline='\n') as f:
+            f.write('\n'.join(lines) + '\n')
+        print('{}: impedance table for {}'.format(args.impedance_table, profile.get('name', profile_file)))
     return 0
 
 

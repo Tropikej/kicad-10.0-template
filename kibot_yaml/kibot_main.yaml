@@ -63,6 +63,7 @@ groups:
       - fab
       - assembly
       - pdf_docs
+      - jlcpcb
       - @MD_README_OUTPUT@
       # - @HTML_KICANVAS_OUTPUT@ # Very experimental, excluded for now
       - @HTML_KIRI_OUTPUT@
@@ -75,6 +76,12 @@ groups:
       - @PDF_SCHEMATIC_OUTPUT@
       - @CSV_BOM_OUTPUT@
       - @HTML_BOM_OUTPUT@
+
+  # JLCPCB fabrication and assembly files (KiBot JLCPCB template)
+  - name: jlcpcb
+    outputs:
+      - _JLCPCB
+      - _JLCPCB_compress
 
   # Human readable PDF documents
   - name: pdf_docs
@@ -215,6 +222,18 @@ import:
       NOTE: @STACKUP_TABLE_NOTE@
 
 # Generated outputs ============================================================
+
+  # JLCPCB -----------------------------------------------------------------------
+  # Gerbers + drill (ZIP), BoM with LCSC part numbers and pick and place with
+  # the JLCPCB rotation corrections. Parts need an `LCSC` field (C123456) to
+  # be in the BoM. Template provided by KiBot, selected by JLCPCB_TEMPLATE.
+  - file: @JLCPCB_TEMPLATE@
+    definitions:
+      _KIBOT_MANF_DIR: '@JLCPCB_DIR@'
+      _KIBOT_MANF_DIR_COMP: '@JLCPCB_DIR@'
+      _KIBOT_COMPRESS_MOVE: true
+      _KIBOT_DRILL_AUX_ORIGIN: false
+      _KIBOT_PLOT_FOOTPRINT_REFS: @PLOT_REFS@
 
   # Netlist --------------------------------------------------------------------
   - file: kibot_out_netlist.yaml
@@ -578,7 +597,8 @@ definitions:
   DESIGNER: Author
 
   LOGO: 'Logos/dummy_logo.png'
-  GIT_URL: 'https://github.com/your-user/your-repo'
+  # auto: URL of the git remote (origin), or set it explicitly
+  GIT_URL: auto
 
   # Revision. Normally overridden by kibot_launch.sh (-E REVISION=...), which
   # computes it from CHANGELOG.md or from the git tag in CI.
@@ -643,6 +663,12 @@ definitions:
   BLENDER_3D_ROT_Z_BOTTOM: -10
   BLENDER_SAMPLES: 50        # Blender engine only: 10 = draft, 100+ = final
 
+  # JLCPCB =====================================================================
+
+  # JLCPCB: SMD only assembly, JLCPCB_with_THT: SMD + through hole assembly
+  # (also available: JLCPCB_stencil, JLCPCB_stencil_with_THT)
+  JLCPCB_TEMPLATE: JLCPCB
+
   # KiRI (visual diff between commits) =========================================
 
   KIRI_MAX_COMMITS: 5
@@ -660,6 +686,7 @@ definitions:
   ASSEMBLY_DIR: '@MANUFACTURING_DIR@/Assembly'
   FABRICATION_DIR: '@MANUFACTURING_DIR@/Fabrication'
   GERBERS_DIR: '@FABRICATION_DIR@/Gerbers'
+  JLCPCB_DIR: '@MANUFACTURING_DIR@/JLCPCB'
   FAB_DRILL_TABLES_DIR: '@FABRICATION_DIR@/Drill Tables'
   TESTING_DIR: Testing
   TESTPOINTS_DIR: '@TESTING_DIR@/Testpoints'

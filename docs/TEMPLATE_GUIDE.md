@@ -20,6 +20,7 @@ definitions.
   - [Pipeline settings: `kibot_settings.yaml`](#pipeline-settings-kibot_settingsyaml)
   - [KiBot parameters: `kibot_yaml/kibot_main.yaml`](#kibot-parameters-kibot_yamlkibot_mainyaml)
   - [Stackup and design rules (JLCPCB)](#stackup-and-design-rules-jlcpcb)
+  - [Ordering at JLCPCB](#ordering-at-jlcpcb)
   - [3D renders: KiCad or Blender](#3d-renders-kicad-or-blender)
   - [Shared libraries](#shared-libraries-symbols-footprints-3d-models)
 - [Running locally (Docker)](#running-locally-docker)
@@ -34,8 +35,12 @@ definitions.
 
 - **KiCad 10** project (hierarchical schematic, custom drawing sheets) and
   KiBot 1.9 configuration.
-- **JLCPCB ready**: design rules and 4-layer stackup (JLC04161H-7628), switch
-  to 6 layers (JLC06161H-3313) with one command.
+- **JLCPCB ready**: design rules, 4-layer stackup (JLC04161H-7628) with its
+  impedance table, switch to 6 layers (JLC06161H-3313) with one command, and
+  the JLCPCB order files: Gerbers ZIP, BoM with LCSC part numbers and pick and
+  place with the JLCPCB rotation corrections.
+- **Starter board**: 40 × 30 mm outline, 4 mounting holes and a test point, so
+  every project status works from the first run.
 - **Automated fabrication document**: stackup table, fabrication notes, drill
   drawings/tables, testpoint tables/highlighting, one page per copper layer.
 - **Automated assembly document**: 3D images, component count table, assembly
@@ -56,6 +61,13 @@ definitions.
   `ghcr.io/inti-cmnb/kicad10_auto_full` image in both cases.
 - **Releases**: pushing a semantic version tag generates the `RELEASED`
   documents, updates `CHANGELOG.md` and creates a GitHub release with assets.
+- **Pull request checks**: ERC/DRC and all the documents generated for each
+  pull request, with a summary posted on the pull request.
+- **Clean history**: the outputs are published on a separate
+  `kibot-outputs/<branch>` branch (configurable), your branches only get them
+  on releases.
+- **One-command setup**: `./run_kibot.sh --init` sets the project metadata and
+  renames the project files; the repository URL is detected automatically.
 
 ## OUTPUTS PER PROJECT STATUS
 
@@ -70,6 +82,7 @@ The project status (KiBot *variant*) selects the generated outputs:
 | Gerbers PDF (`Manufacturing/Fabrication/`) | | ✅ | ✅ | ✅ |
 | Fabrication PDF + notes, Gerbers, drill, ODB++, ZIP | | ✅ | ✅ | ✅ |
 | Assembly PDF + notes, pick and place, interactive BoM | | ✅ | ✅ | ✅ |
+| JLCPCB files: Gerbers ZIP, BoM, pick and place (`Manufacturing/JLCPCB/`) | | ✅ | ✅ | ✅ |
 | 3D renders PNG (`Images/`), STEP (`3D/`) | | ✅ | ✅ | ✅ |
 | Testpoint lists (`Testing/`) | | ✅ | ✅ | ✅ |
 | KiRI diff viewer, HTML navigation page | | ✅ | ✅ | ✅ |
@@ -114,9 +127,23 @@ The project status (KiBot *variant*) selects the generated outputs:
    git checkout -b dev
    ```
 
-5. Edit the metadata in the `definitions:` section at the end of
-   [`kibot_yaml/kibot_main.yaml`](../kibot_yaml/kibot_main.yaml)
-   (`PROJECT_NAME`, `BOARD_NAME`, `COMPANY`, `DESIGNER`, `LOGO`, `GIT_URL`...).
+5. Set the project metadata (and rename the project files if you cloned the
+   template instead of using *New Project From Template*):
+
+   ```
+   ./run_kibot.sh --init                 # asks the values
+   ./run_kibot.sh --init --project "Motor Controller" --board "MC-01 Mainboard" \
+       --company KejLabs --designer "J. Doe" --name mc01_main -y
+   ```
+
+   It writes `PROJECT_NAME`, `BOARD_NAME`, `COMPANY` and `DESIGNER` in the
+   `definitions:` section of
+   [`kibot_yaml/kibot_main.yaml`](../kibot_yaml/kibot_main.yaml) (you can also
+   edit them there, with `LOGO`...). `GIT_URL: auto` is replaced by the URL of
+   the git remote `origin`.
+
+   The starter parts of the *Section A* sheet (H1-H4 mounting holes, TP1 test
+   point) and the 40 × 30 mm outline can be kept, moved or deleted.
 
 6. Edit the report templates in
    [`kibot_resources/templates`](../kibot_resources/templates): fabrication and
@@ -145,8 +172,9 @@ Read by the local runners and by the GitHub workflow:
 ```yaml
 variant: DRAFT          # DRAFT | PRELIMINARY | CHECKED | RELEASED | <assembly variant>
 docker_image: ghcr.io/inti-cmnb/kicad10_auto_full:1.9.1-1_k10.0.5_d13.2_b4.2.4LTS
-commit_outputs: true    # CI: commit the outputs to the repository
+ci_outputs: branch      # CI: where the outputs go (branch | commit | none)
 ci_render_engine: kicad # CI: 3D render engine (kicad | blender)
+pr_variant: CHECKED     # CI: status used to check the pull requests
 lib_KEJLABS_LIB_url: https://github.com/kejlabs/kicad-libs.git   # shared libraries (optional)
 ```
 
@@ -206,9 +234,45 @@ dielectric constants), the finish (HASL lead-free) and the colors. The
 fabrication document, stackup table, Gerbers and drill files follow
 automatically. Removing layers that still hold copper is refused (`--force` to
 override). Add a profile for another stackup or manufacturer by copying one of
-the YAML files. Update the impedance table template
-(`kibot_resources/templates/impedance_table.txt`) with your stackup (JLCPCB
-[impedance calculator](https://jlcpcb.com/pcb-impedance-calculator)).
+the YAML files.
+
+The profile also writes the **impedance table** of the fabrication document
+(`kibot_resources/templates/impedance_table.txt`, `impedance:` entry of the
+profile). The values come from the JLCPCB
+[impedance calculator](https://jlcpcb.com/pcb-impedance-calculator), outer
+layers referenced to the adjacent plane, 0.2032 mm gap for the pairs:
+
+| Impedance | JLC04161H-7628 (4 layers) | JLC06161H-3313 (6 layers) |
+| --- | --- | --- |
+| 50 Ω single-ended | 0.3586 mm | 0.1509 mm |
+| 90 Ω differential (USB) | 0.2906 mm | 0.1537 mm |
+| 100 Ω differential | 0.2258 mm | 0.1191 mm |
+
+Keep only the lines you really use: they are requirements for the
+manufacturer. The table is printed when the board setup has *Impedance
+controlled* enabled (*Board Setup → Physical Stackup*).
+
+### Ordering at JLCPCB
+
+PRELIMINARY and higher generate the JLCPCB order files in
+`Manufacturing/JLCPCB/` (also attached to the releases), using the JLCPCB
+template of KiBot:
+
+| File | Upload it in |
+| --- | --- |
+| `<project>-_JLCPCB_compress.zip` (Gerbers + drill, JLCPCB naming) | PCB order: *Add Gerber file* |
+| `<project>_bom_jlc.csv` (BoM with `LCSC Part #`) | PCB Assembly: *BOM* |
+| `<project>_cpl_jlc.csv` (pick and place, JLCPCB rotations) | PCB Assembly: *CPL* |
+
+- Add an **`LCSC`** field (i.e. `C307331`) to the symbols to assemble: only
+  the parts with an LCSC code are in the JLCPCB BoM. `LCSC#`, `JLCPCB` and
+  similar field names are accepted too. The regular BoMs show it in the
+  `LCSC` column.
+- The rotations are corrected with the KiBot JLCPCB database; check the
+  preview of the JLCPCB assembly page anyway.
+- `JLCPCB_TEMPLATE` in `kibot_main.yaml` selects the assembly type: `JLCPCB`
+  (SMD only, default) or `JLCPCB_with_THT` (SMD and through hole), and
+  `JLCPCB_stencil` / `JLCPCB_stencil_with_THT` to add the paste layers.
 
 ### 3D renders: KiCad or Blender
 
@@ -239,9 +303,9 @@ with all the CPUs given to Docker. Measured for one view (2000 px, 50 samples):
 That's why **the CI always uses the engine of `ci_render_engine`** in
 `kibot_settings.yaml` (`kicad` by default), whatever `RENDER_ENGINE` says.
 Render with Blender locally when you need photo-realistic images (a manual run
-of the workflow can still choose `blender`). Note that with
-`commit_outputs: true` the next CI run replaces committed Blender renders by
-KiCad ones: keep Blender renders for local use, or copy them elsewhere.
+of the workflow can still choose `blender`). The CI publishes KiCad renders:
+keep your Blender renders for local use, or copy them elsewhere if you commit
+them (`ci_outputs: commit` would replace them at the next run).
 
 Parameters:
 
@@ -369,8 +433,9 @@ changes included). The text variables of the `.kicad_pro` are updated on
 purpose, so the KiCad GUI shows the same values as the documents.
 
 > [!WARNING]
-> Outputs generated locally can conflict with the ones committed by the CI.
-> Either don't commit local outputs, or set `commit_outputs: false`.
+> Don't commit the outputs generated locally: the CI publishes them
+> (`ci_outputs`) and commits them on releases. With `ci_outputs: commit`,
+> local and CI outputs would conflict.
 
 ### Calculating board costs (KiCost)
 
@@ -392,9 +457,26 @@ image and script as a local run. The 3D models are cached between runs.
 
 | Event | Variant | Result |
 | --- | --- | --- |
-| Push on `main` or `dev` | `variant` of `kibot_settings.yaml` | Outputs committed on the branch (this commit doesn't trigger a new run) |
+| Push on `main` or `dev` | `variant` of `kibot_settings.yaml` | Outputs published according to `ci_outputs` (see below) |
+| Pull request to `main` or `dev` | `pr_variant` (`CHECKED`) | ERC/DRC and documents, summary comment on the pull request, nothing committed |
 | Push of a tag `x.y.z` | `RELEASED` | `CHANGELOG.md` updated, outputs committed on `main`, GitHub release with assets |
 | Manual run (Actions tab) | Choice (or settings) | Same as a push, the render engine can be chosen too |
+
+**Where the outputs go** (`ci_outputs` in `kibot_settings.yaml`):
+
+| `ci_outputs` | Push on a branch | Release (tag) |
+| --- | --- | --- |
+| `branch` (default) | Snapshot of the project + outputs force-pushed to `kibot-outputs/<branch>` (one commit, replaced at each run): browse it on GitHub, your branch history stays small | Committed on `main` |
+| `commit` | Committed on the branch itself at each run (KDT behaviour) | Committed on `main` |
+| `none` | Workflow artifacts only | Committed on `main` |
+
+With `branch`, the generated `README.md` (renders, links) is visible on the
+`kibot-outputs/<branch>` branch, and on `main` after each release.
+
+**Run summary**: each run writes a summary on its page (*Actions* tab): status,
+revision, ERC/DRC errors and warnings by type, and links to the documents. For
+pull requests the same summary is posted as a comment, updated at each push.
+The check fails if KiBot fails (i.e. ERC errors).
 
 The 3D renders use `ci_render_engine` (`kicad` by default, see
 [3D renders](#3d-renders-kicad-or-blender)). Library submodules are fetched
@@ -402,10 +484,10 @@ automatically (`KICAD_LIBS_TOKEN` secret for private ones, see
 [Shared libraries](#shared-libraries-symbols-footprints-3d-models)).
 
 The logs and the outputs are always available as workflow artifacts
-(`kibot_logs`, `kibot_outputs_<VARIANT>`), even with `commit_outputs: false`.
-Pushes that only modify Markdown files don't trigger the workflow, nor do
-merge commits of pull requests (the outputs were generated on the source
-branch).
+(`kibot_logs`, `kibot_outputs_<VARIANT>`).
+Pushes that only modify Markdown files (or empty commits) don't trigger the
+workflow, nor do merge commits of pull requests (the outputs were generated on
+the source branch): use a manual run to regenerate.
 
 ### Testing the workflow locally
 
@@ -524,9 +606,10 @@ board. Testpoints are the symbols with a `TP` reference.
 ├─ Logos              # Logos (optional)
 ├─ Manufacturing
 │  ├─ Assembly        # Assembly PDF, BoM, pick and place, notes
-│  └─ Fabrication     # Fabrication PDF, Gerbers PDF, ZIP, ODB++, notes
-│     ├─ Drill Tables
-│     └─ Gerbers
+│  ├─ Fabrication     # Fabrication PDF, Gerbers PDF, ZIP, ODB++, notes
+│  │  ├─ Drill Tables
+│  │  └─ Gerbers
+│  └─ JLCPCB          # JLCPCB order files (Gerbers ZIP, BoM, pick and place)
 ├─ PCB                # PCB routing PDF (generated)
 ├─ Reports            # ERC/DRC reports (generated)
 ├─ Schematic          # Schematic PDF (generated)
@@ -541,10 +624,10 @@ board. Testpoints are the symbols with a `TP` reference.
 
 ## TROUBLESHOOTING
 
-- **PRELIMINARY/CHECKED fails on the empty template**: the template board has
-  no outline, no component and no hole, so the interactive BoM, the drill
-  table (and the fabrication document using it) and the STEP can't be
-  generated. Use `DRAFT` until the board has an outline and components.
+- **PRELIMINARY/CHECKED fails on an empty board**: some outputs need a board
+  outline, components and holes (interactive BoM, drill tables and the
+  fabrication document, STEP). The starter board of the template has them;
+  if you delete it, use `DRAFT` until your board has an outline and parts.
 - **A failing output**: KiBot continues with the other outputs
   (`--dont-stop`) but the run returns an error. Look for `ERROR` in the
   console or in the logs (`--log-dir`, `kibot_logs` artifact in CI).

@@ -47,6 +47,7 @@
 | Assembly document | [PDF](${pdf_assembly_outpath}) |
 | Fabrication files (Gerbers, drill, fab. PDF) | [ZIP](${zip_compress_fab_outpath}) |
 | ODB++ | [ZIP](${zip_odb_outpath}) |
+| JLCPCB order files (Gerbers ZIP, BoM, pick and place) | [Folder](Manufacturing/JLCPCB) |
 | Bill of Materials | [CSV](${csv_bom_outpath}) · [HTML](${html_bom_outpath}) · [Interactive](${html_bom_interactive_outpath}) |
 | Pick and place | [CSV](${csv_position_outpath}) |
 | 3D model | [STEP](${step_outpath}) |
@@ -77,9 +78,10 @@
     │
     ├─ Manufacturing      # Assembly and fabrication documents
     │  ├─ Assembly        # Assembly documents (BoM, pos, notes)
-    │  └─ Fabrication     # Fabrication documents (ZIP, ODB++, notes, Gerbers PDF)
-    │     ├─ Drill Tables # CSV drill tables
-    │     └─ Gerbers      # Gerbers and drill files
+    │  ├─ Fabrication     # Fabrication documents (ZIP, ODB++, notes, Gerbers PDF)
+    │  │  ├─ Drill Tables # CSV drill tables
+    │  │  └─ Gerbers      # Gerbers and drill files
+    │  └─ JLCPCB          # JLCPCB order files
     │
     ├─ PCB                # PCB routing PDF
     ├─ Reports            # ERC/DRC reports

@@ -32,6 +32,8 @@ outputs:
       - "@MAN_FIELD@"
       - "@MPN_FIELD@"
       - "Supplier Part Number"
+      - field: _field_lcsc_part  # LCSC / JLCPCB part number (LCSC, LCSC#, JLCPCB... fields)
+        name: LCSC
       # - "arrow#"
       # - "digikey#"
       # - "farnell#"

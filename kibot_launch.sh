@@ -58,6 +58,9 @@ function display_help() {
     echo -e "  --force                     With --stackup: remove copper layers even if they are used."
     echo -e "  --server [PORT]             Start an HTTP server to browse the outputs (default: 8000)."
     echo -e "  --stop-server               Stop the running HTTP server."
+    echo -e "  --init [OPTIONS]            Set the project metadata and rename the project files, asks"
+    echo -e "                              when not given: --project, --board, --company, --designer,"
+    echo -e "                              --name (KiCad files name), -y (don't ask)."
     echo -e "  -h, --help                  Display this help message."
     echo
     echo -e "RUNNER OPTIONS (run_kibot.sh / run_kibot.ps1 only)"
@@ -85,6 +88,12 @@ function display_help() {
     echo -e "  Other:       assembly variants, run like RELEASED, outputs saved in Variants/"
     exit 0
 }
+
+# Project initialization: metadata and project files name
+if [[ "$1" == --init ]]; then
+    shift
+    exec python3 kibot_resources/scripts/init_project.py "$@"
+fi
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -218,6 +227,12 @@ common_args=(-c "$kibot_config" -d "$output_dir" -g "variant=$variant" -E "REVIS
 if [[ -n "$render_engine" ]]; then
     common_args+=(-E "RENDER_ENGINE=$render_engine")
 fi
+# GIT_URL: auto -> URL of the git remote (https, without credentials)
+if grep -qE "^  GIT_URL:[[:space:]]*['\"]?auto['\"]?[[:space:]]*(#.*)?$" "$kibot_config"; then
+    git_url="$(git remote get-url origin 2>/dev/null)"
+    git_url="$(echo "$git_url" | sed -E 's#^git@([^:]+):#https://\1/#; s#^ssh://git@([^/]+)/#https://\1/#; s#://[^@/]+@#://#; s#\.git$##')"
+    common_args+=(-E "GIT_URL=$git_url")
+fi
 
 # KiBot saves the PCB/schematic while working (text variables, stackup
 # drawing...). Keep the designer's files untouched, including uncommitted
@@ -267,8 +282,9 @@ if [[ "$costs_flag" == true ]]; then
 else
     case "$variant" in
         DRAFT)
-            run_kibot readme --skip-pre set_text_variables,draw_fancy_stackup,erc,drc md_readme
+            # README after the outputs: set_text_variables updated the project
             run_kibot outputs --skip-pre draw_fancy_stackup,erc,drc draft_group
+            run_kibot readme --skip-pre set_text_variables,draw_fancy_stackup,erc,drc md_readme
             ;;
         PRELIMINARY)
             run_kibot notes --skip-pre all notes

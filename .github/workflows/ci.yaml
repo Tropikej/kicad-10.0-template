@@ -4,7 +4,10 @@ name: KiBot
 # same command as a local run: the docker image of kibot_settings.yaml
 # executes kibot_launch.sh on the checked out project.
 #
-# - push on main/dev    : outputs for the variant set in kibot_settings.yaml
+# - push on main/dev    : outputs for the variant set in kibot_settings.yaml,
+#                         published according to ci_outputs (branch/commit/none)
+# - pull request        : checks (pr_variant, ERC/DRC), summary posted on the
+#                         pull request, nothing committed
 # - push of a tag x.y.z : RELEASED variant, CHANGELOG.md update, outputs
 #                         committed on main and GitHub release with assets
 # - manual run (Actions tab) : variant and render engine can be overridden
@@ -30,14 +33,22 @@ on:
       - dev
     paths-ignore:
       - '**.md'
+  pull_request:
+    branches:
+      - main
+      - dev
+    paths-ignore:
+      - '**.md'
 
 permissions:
   contents: write
+  pull-requests: write
 
 # Never run two generations for the same branch at the same time
 concurrency:
   group: kibot-${{ github.ref }}
-  cancel-in-progress: false
+  # A new push on a pull request cancels the previous check
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   KIBOT_LOGS: kibot_logs
@@ -81,7 +92,10 @@ jobs:
             sed -n "s/^$1:[[:space:]]*\([^#]*\).*/\1/p" kibot_settings.yaml | head -n1 | sed 's/[[:space:]]*$//; s/^["'\'']//; s/["'\'']$//'
           }
           variant="$(get_setting variant)"
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            variant="$(get_setting pr_variant)"
+            variant="${variant:-CHECKED}"
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
             echo "Tag pushed: forcing the RELEASED variant"
             variant=RELEASED
           elif [[ -n "${{ inputs.variant }}" && "${{ inputs.variant }}" != "settings" ]]; then
@@ -94,7 +108,17 @@ jobs:
           {
             echo "variant=${variant:-DRAFT}"
             echo "render_engine=${render_engine:-kicad}"
-            echo "commit_outputs=$(get_setting commit_outputs)"
+            ci_outputs="$(get_setting ci_outputs)"
+            if [[ -z "$ci_outputs" ]]; then
+              # Old setting name
+              [[ "$(get_setting commit_outputs)" == "false" ]] && ci_outputs=none || ci_outputs=commit
+            fi
+            echo "ci_outputs=${ci_outputs}"
+            if [[ "${{ github.ref_type }}" == "tag" ]]; then
+              echo "revision=${{ github.ref_name }}"
+            else
+              echo "revision=$(python3 kibot_resources/scripts/get_changelog_version.py -f CHANGELOG.md)"
+            fi
             echo "image=$(get_setting docker_image)"
           } | tee -a "$GITHUB_OUTPUT"
 
@@ -129,6 +153,7 @@ jobs:
         run: docker pull "${{ steps.settings.outputs.image }}"
 
       - name: Run KiBot
+        id: kibot
         env:
           VARIANT: ${{ steps.settings.outputs.variant }}
           RENDER_ENGINE: ${{ steps.settings.outputs.render_engine }}
@@ -142,6 +167,46 @@ jobs:
           fi
           ./run_kibot.sh "${args[@]}"
 
+      # Job summary, also posted on the pull requests
+      - name: Summary
+        if: always() && steps.settings.outcome == 'success'
+        env:
+          VARIANT: ${{ steps.settings.outputs.variant }}
+          STATUS: ${{ steps.kibot.outcome }}
+          REVISION: ${{ steps.settings.outputs.revision }}
+          ENGINE: ${{ steps.settings.outputs.render_engine }}
+          CI_OUTPUTS: ${{ steps.settings.outputs.ci_outputs }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          link_base=""
+          if [[ "${{ github.event_name }}" != "pull_request" && "${{ github.ref_type }}" == "branch" ]]; then
+            case "$CI_OUTPUTS" in
+              branch) link_base="${{ github.server_url }}/${{ github.repository }}/blob/kibot-outputs/${{ github.ref_name }}" ;;
+              commit) link_base="${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}" ;;
+            esac
+          fi
+          python3 kibot_resources/scripts/ci_summary.py --variant "$VARIANT" --status "$STATUS" \
+            --revision "$REVISION" --engine "$ENGINE" --link-base "$link_base" \
+            --artifacts-url "$RUN_URL" -o "$RUNNER_TEMP/summary.md"
+          cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment the pull request
+        if: always() && github.event_name == 'pull_request' && steps.settings.outcome == 'success'
+        continue-on-error: true  # i.e. read-only token for pull requests from forks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # Update the previous summary comment instead of adding a new one
+          comment_id=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.body | startswith("<!-- kibot-summary -->")) | .id' | tail -n1)
+          if [[ -n "$comment_id" ]]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$comment_id" \
+              -F "body=@$RUNNER_TEMP/summary.md" > /dev/null
+          else
+            gh pr comment "$PR" --body-file "$RUNNER_TEMP/summary.md"
+          fi
+
       - name: Store logs
         if: always()
         uses: actions/upload-artifact@v7
@@ -150,6 +215,7 @@ jobs:
           path: ${{ env.KIBOT_LOGS }}
 
       - name: Store outputs
+        if: steps.kibot.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: kibot_outputs_${{ steps.settings.outputs.variant }}
@@ -161,8 +227,24 @@ jobs:
       # No "[skip ci]" in the commit messages: pushes made with the GITHUB_TOKEN
       # don't trigger workflows anyway, and "[skip ci]" would also block the
       # release when a tag is pushed on one of these commits.
+      # ci_outputs: branch -> single commit (project + outputs) force-pushed to
+      # kibot-outputs/<branch>: browsable, and no history growth
+      - name: Publish outputs (kibot-outputs branch)
+        if: github.event_name != 'pull_request' && github.ref_type == 'branch' && steps.settings.outputs.ci_outputs == 'branch'
+        env:
+          VARIANT: ${{ steps.settings.outputs.variant }}
+        run: |
+          rm -rf "$KIBOT_LOGS"
+          git add -A
+          commit=$(git commit-tree "$(git write-tree)" \
+            -m "KiBot outputs (${VARIANT}) of ${{ github.ref_name }} ${GITHUB_SHA::7}")
+          git push --force origin "$commit:refs/heads/kibot-outputs/${{ github.ref_name }}"
+          git reset -q
+          echo "Outputs: ${{ github.server_url }}/${{ github.repository }}/tree/kibot-outputs/${{ github.ref_name }}"
+
+      # ci_outputs: commit -> outputs committed on the branch itself
       - name: Commit outputs (branch)
-        if: github.ref_type == 'branch' && steps.settings.outputs.commit_outputs == 'true'
+        if: github.event_name != 'pull_request' && github.ref_type == 'branch' && steps.settings.outputs.ci_outputs == 'commit'
         env:
           VARIANT: ${{ steps.settings.outputs.variant }}
         run: |
@@ -210,6 +292,7 @@ jobs:
             Manufacturing/Fabrication/*.pdf
             Manufacturing/Fabrication/*.zip
             Manufacturing/Fabrication/*.txt
+            Manufacturing/JLCPCB/*
             3D/*.step
             Images/*.png
             Testing/Testpoints/*.csv

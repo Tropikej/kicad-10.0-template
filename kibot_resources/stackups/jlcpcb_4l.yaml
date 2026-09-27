@@ -20,3 +20,12 @@ layers:
   - {copper: "L3 (PWR)", type: power, thickness: 0.0152}
   - {dielectric: prepreg, material: "7628", thickness: 0.2104, epsilon_r: 4.4, loss_tangent: 0.02}
   - {copper: "L4 (Sig)", type: signal, thickness: 0.035}
+
+# Impedance table of the fabrication document (written to
+# kibot_resources/templates/impedance_table.txt by --stackup).
+# Values from the JLCPCB impedance calculator for JLC04161H-7628, outer layers
+# referenced to the adjacent plane: https://jlcpcb.com/pcb-impedance-calculator
+impedance:
+  - {line: Coated Microstrip, impedance: 50, tolerance: "±10 %", layer: L1 / L4, width: 0.3586, gap: "-", ref: L2 / L3}
+  - {line: Edge-Coupled Coated Microstrip, impedance: 90, tolerance: "±10 %", layer: L1 / L4, width: 0.2906, gap: 0.2032, ref: L2 / L3}
+  - {line: Edge-Coupled Coated Microstrip, impedance: 100, tolerance: "±10 %", layer: L1 / L4, width: 0.2258, gap: 0.2032, ref: L2 / L3}
