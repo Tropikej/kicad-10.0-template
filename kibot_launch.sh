@@ -359,6 +359,32 @@ if [[ "$costs_flag" != true && "$variant" != DRAFT ]]; then
     done
 fi
 
+# Panel (KiKit): the panel PCB, then its Gerbers / drill with kibot_panel.yaml
+# (a separate configuration: the panel is another board, without variants).
+# Before the other outputs, so the HTML navigation page shows its preview
+if [[ "$costs_flag" != true && "$(get_setting panel)" == true ]]; then
+    case "$variant" in
+        PRELIMINARY|CHECKED|RELEASED)
+            rm -rf "$output_dir/Manufacturing/Panel"
+            if run_kibot panel --skip-pre all panel_group; then
+                panel_pcb="$(find "$output_dir" -name '*-panel.kicad_pcb' -not -path '*/Variants/*' | head -n1)"
+                if [[ -n "$panel_pcb" ]]; then
+                    cmd=(kibot -c kibot_yaml/kibot_panel.yaml -b "$panel_pcb" -e "" -d "$output_dir" --dont-stop)
+                    [[ -n "$log_dir" ]] && cmd=(kibot --log "$log_dir/kibot_panel_files.log" "${cmd[@]:1}")
+                    echo -e "${GREEN}Running: ${cmd[*]}${NC}"
+                    if ! "${cmd[@]}"; then
+                        echo -e "${RED}KiBot step 'panel_files' failed${NC}"
+                        failed=1
+                    fi
+                else
+                    echo -e "${RED}Panel PCB not found${NC}"
+                    failed=1
+                fi
+            fi
+            ;;
+    esac
+fi
+
 if [[ "$costs_flag" == true ]]; then
     run_kibot costs --skip-pre erc,drc,draw_fancy_stackup \
         -E "KICOST_CONFIG=kibot_yaml/kicost_config_local.yaml" xlsx_bom
@@ -381,31 +407,6 @@ else
             # Assembly variant
             run_kibot notes --skip-pre all notes
             run_kibot outputs variant_group
-            ;;
-    esac
-fi
-
-# Panel (KiKit): the panel PCB, then its Gerbers / drill with kibot_panel.yaml
-# (a separate configuration: the panel is another board, without variants)
-if [[ "$costs_flag" != true && "$(get_setting panel)" == true ]]; then
-    case "$variant" in
-        PRELIMINARY|CHECKED|RELEASED)
-            rm -rf "$output_dir/Manufacturing/Panel"
-            if run_kibot panel --skip-pre all panel_group; then
-                panel_pcb="$(find "$output_dir" -name '*-panel.kicad_pcb' -not -path '*/Variants/*' | head -n1)"
-                if [[ -n "$panel_pcb" ]]; then
-                    cmd=(kibot -c kibot_yaml/kibot_panel.yaml -b "$panel_pcb" -e "" -d "$output_dir" --dont-stop)
-                    [[ -n "$log_dir" ]] && cmd=(kibot --log "$log_dir/kibot_panel_files.log" "${cmd[@]:1}")
-                    echo -e "${GREEN}Running: ${cmd[*]}${NC}"
-                    if ! "${cmd[@]}"; then
-                        echo -e "${RED}KiBot step 'panel_files' failed${NC}"
-                        failed=1
-                    fi
-                else
-                    echo -e "${RED}Panel PCB not found${NC}"
-                    failed=1
-                fi
-            fi
             ;;
     esac
 fi
