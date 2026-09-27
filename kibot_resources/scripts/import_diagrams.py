@@ -46,8 +46,13 @@ TITLE_BLOCK = 45
 
 
 def sha256(path):
+    """ Hash of a source. Text sources (.drawio, .svg) with LF line endings: the
+        same on a Windows (CRLF) and a Linux (CI) checkout """
     with open(path, 'rb') as f:
-        return hashlib.sha256(f.read()).hexdigest()
+        data = f.read()
+    if os.path.splitext(path)[1].lower() in ('.drawio', '.svg'):
+        data = data.replace(b'\r\n', b'\n')
+    return hashlib.sha256(data).hexdigest()
 
 
 def sources(diagrams):
