@@ -291,7 +291,8 @@ git add .gitmodules lib && git commit -m "Add libraries"
 | `--update-libs` | Moves the libraries to the latest commit of their branch (commit the change to use it in CI) |
 | `--check-libs` | Fails if a declared library is missing (used by the CI) |
 
-(Same options for `.un_kibot.ps1`, except `--check-libs`.)
+(Same options for `.
+un_kibot.ps1`, except `--check-libs`.)
 
 - The project records the exact commit of each library: an old release is
   always regenerated with the library version it was designed with.
@@ -391,7 +392,7 @@ image and script as a local run. The 3D models are cached between runs.
 
 | Event | Variant | Result |
 | --- | --- | --- |
-| Push on `main` or `dev` | `variant` of `kibot_settings.yaml` | Outputs committed on the branch (`[skip ci]`) |
+| Push on `main` or `dev` | `variant` of `kibot_settings.yaml` | Outputs committed on the branch (this commit doesn't trigger a new run) |
 | Push of a tag `x.y.z` | `RELEASED` | `CHANGELOG.md` updated, outputs committed on `main`, GitHub release with assets |
 | Manual run (Actions tab) | Choice (or settings) | Same as a push, the render engine can be chosen too |
 

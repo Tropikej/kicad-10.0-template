@@ -114,7 +114,7 @@ jobs:
       - name: Extract release notes
         if: github.ref_type == 'tag'
         run: |
-          python3 kibot_resources/scripts/get_changelog.py -f CHANGELOG.md \
+          python3 kibot_resources/scripts/get_changelog.py -f CHANGELOG.md --markdown \
             --version "${{ github.ref_name }}" > "$RUNNER_TEMP/release_notes.md"
           cat "$RUNNER_TEMP/release_notes.md"
 
@@ -158,6 +158,9 @@ jobs:
             !.git
             !${{ env.KIBOT_LOGS }}
 
+      # No "[skip ci]" in the commit messages: pushes made with the GITHUB_TOKEN
+      # don't trigger workflows anyway, and "[skip ci]" would also block the
+      # release when a tag is pushed on one of these commits.
       - name: Commit outputs (branch)
         if: github.ref_type == 'branch' && steps.settings.outputs.commit_outputs == 'true'
         env:
@@ -169,7 +172,7 @@ jobs:
             echo "No changes in the outputs"
             exit 0
           fi
-          git commit -m "Update outputs (${VARIANT}) [skip ci]"
+          git commit -m "Update outputs (${VARIANT})"
           # Someone may have pushed during the generation: rebase, keeping
           # the freshly generated outputs in case of conflict
           for _ in 1 2 3; do
@@ -184,12 +187,12 @@ jobs:
         run: |
           rm -rf "$KIBOT_LOGS"
           git add -A
-          git commit -m "Update outputs (release ${{ github.ref_name }}) [skip ci]" || true
+          git commit -m "Update outputs (release ${{ github.ref_name }})" || true
           release_commit=$(git rev-parse HEAD)
           git fetch origin main
           git checkout -B main origin/main
           git merge --no-ff "$release_commit" -X theirs \
-            -m "Merge outputs of release ${{ github.ref_name }} [skip ci]"
+            -m "Merge outputs of release ${{ github.ref_name }}"
           git push origin main
           # Back to the release files for the next step
           git checkout "$release_commit"

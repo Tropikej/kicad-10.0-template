@@ -2,7 +2,7 @@ import argparse
 import re
 import sys
 
-def parse_changelog(file_path, version, title_only, extra_spaces, separators):
+def parse_changelog(file_path, version, title_only, extra_spaces, separators, markdown=False):
     try:
         with open(file_path, 'r') as f:
             changelog = f.read()
@@ -24,6 +24,9 @@ def parse_changelog(file_path, version, title_only, extra_spaces, separators):
 
     if title_only:
         print(f"Version {version} - {date}" if date else f"Version {version}")
+    elif markdown:
+        # Keep the Markdown as is (i.e. GitHub release notes)
+        print(content.strip())
     else:
 
         if separators is not None:
@@ -43,9 +46,10 @@ def main():
     parser.add_argument("-t", "--title-only", action="store_true", help="Print the title only")
     parser.add_argument("-s", "--extra-spaces", action="store_true", help="Add extra spaces between lines")
     parser.add_argument("-a", "--separators", type=int, required=False, help="Number of underscores for separators")
+    parser.add_argument("-m", "--markdown", action="store_true", help="Keep the Markdown formatting")
 
     args = parser.parse_args()
-    parse_changelog(args.file, args.version, args.title_only, args.extra_spaces, args.separators)
+    parse_changelog(args.file, args.version, args.title_only, args.extra_spaces, args.separators, args.markdown)
 
 if __name__ == "__main__":
     main()
