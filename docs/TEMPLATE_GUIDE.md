@@ -108,12 +108,14 @@ The project status (KiBot *variant*) selects the generated outputs:
    - **Linux**: `~/.local/share/kicad/10.0/template`
    - **macOS**: `~/Documents/KiCad/10.0/template`
 
-2. Install the fonts of [`kibot_resources/fonts`](../kibot_resources/fonts) on
-   your system and copy the color theme
+2. Copy the color theme
    [`kibot_resources/colors/Altium_Theme.json`](../kibot_resources/colors/Altium_Theme.json)
    in your KiCad `colors` folder (`%APPDATA%\kicad\10.0\colors` on Windows,
-   `~/.config/kicad/10.0/colors` on Linux). KiBot installs them automatically
-   in the container, this step is only for the KiCad GUI.
+   `~/.config/kicad/10.0/colors` on Linux). The sheets use Arial and Times New
+   Roman, present on Windows and macOS (Linux: install `fonts-liberation`). The
+   container uses the metric-compatible free Liberation fonts of
+   [`kibot_resources/fonts`](../kibot_resources/fonts) instead (same text
+   sizes and positions).
 
 3. In KiCad: **File → New Project From Template** and select this template.
 
@@ -743,7 +745,7 @@ board. Testpoints are the symbols with a `TP` reference.
 ├─ Images             # Pictures and 3D renders
 ├─ kibot_resources
 │  ├─ colors          # Color theme, installed by KiBot
-│  ├─ fonts           # Fonts, installed by KiBot
+│  ├─ fonts           # Liberation fonts (Arial / Times New Roman metrics)
 │  ├─ scripts         # Scripts used by the text variables
 │  └─ templates       # Templates of the generated reports (notes, README...)
 ├─ kibot_yaml         # KiBot configuration

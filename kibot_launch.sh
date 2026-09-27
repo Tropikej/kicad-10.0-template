@@ -181,6 +181,34 @@ if [[ "$server_flag" == true ]]; then
     exit 0
 fi
 
+# Fonts: the sheets use Arial / Times New Roman, not redistributable. Use the
+# metric-compatible Liberation fonts of kibot_resources/fonts under these names
+# (fontconfig rule for this process tree only, the font files are unchanged),
+# so KiCad doesn't report a substitution.
+font_dir="$(mktemp -d)"
+trap 'rm -rf "$font_dir"' EXIT
+if [[ -d kibot_resources/fonts ]] && command -v fc-cache >/dev/null; then
+    cat > "$font_dir/fonts.conf" <<EOF
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <cachedir>$font_dir/cache</cachedir>
+  <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
+  <dir>$PWD/kibot_resources/fonts</dir>
+  <match target="scan">
+    <test name="family"><string>Liberation Sans</string></test>
+    <edit name="family" mode="prepend"><string>Arial</string></edit>
+  </match>
+  <match target="scan">
+    <test name="family"><string>Liberation Serif</string></test>
+    <edit name="family" mode="prepend"><string>Times New Roman</string></edit>
+  </match>
+</fontconfig>
+EOF
+    export FONTCONFIG_FILE="$font_dir/fonts.conf"
+    fc-cache >/dev/null 2>&1 || true
+fi
+
 # Stackup profile: edit the PCB and exit
 if [[ -n "$stackup" ]]; then
     if [[ "$stackup" == list ]]; then
@@ -189,7 +217,8 @@ if [[ -n "$stackup" ]]; then
     stackup_args=("$stackup")
     if [[ "$force_flag" == true ]]; then stackup_args+=(--force); fi
     if [[ "$no_fill_flag" == true ]]; then stackup_args+=(--no-fill); fi
-    exec python3 kibot_resources/scripts/set_stackup.py "${stackup_args[@]}"
+    python3 kibot_resources/scripts/set_stackup.py "${stackup_args[@]}"
+    exit $?
 fi
 
 # The repository is often owned by another user than the one running the
@@ -263,9 +292,20 @@ function restore_design_files() {
     for f in "${design_files[@]}"; do
         cp -p "$snapshot_dir/$(basename "$f")" "$f"
     done
-    rm -rf "$snapshot_dir"
+    rm -rf "$snapshot_dir" "$font_dir"
 }
 trap restore_design_files EXIT
+
+# Netlist XML of the schematic: the cover page index (set_text_variables) reads
+# it before the update_xml preflight regenerates it, so it must exist before
+# KiBot starts (fresh checkout, CI)
+for pro in ./*.kicad_pro; do
+    [[ -f "$pro" && ! "$(basename "$pro")" =~ ^kibot_.{8}\.kicad_pro$ ]] || continue
+    sch="${pro%.kicad_pro}.kicad_sch"
+    if [[ -f "$sch" ]] && ! kicad-cli sch export python-bom -o "${sch%.kicad_sch}.xml" "$sch" >/dev/null 2>&1; then
+        echo -e "${YELLOW}Warning: couldn't export the netlist XML of $sch, the cover page index will be empty.${NC}"
+    fi
+done
 
 # Run KiBot: run_kibot <log name> [kibot options...] <outputs/groups...>
 failed=0
