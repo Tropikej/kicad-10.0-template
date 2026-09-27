@@ -11,6 +11,9 @@ outputs:
   category: '@DIR@'
   dir: '@DIR@'
   options:
+    # Test points, fiducials, mounting holes... excluded, also with the KiCad 10
+    # variants (assembly variants), where KiBot drops this default
+    exclude_filter: '_mechanical'
     format: CSV
     csv:
       hide_pcb_info: true
