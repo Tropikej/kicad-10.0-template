@@ -118,6 +118,7 @@ jobs:
               echo "revision=$(python3 kibot_resources/scripts/get_changelog_version.py -f CHANGELOG.md)"
             fi
             echo "image=$(get_setting docker_image)"
+            echo "boards=$(get_setting boards | tr ',' ' ')"
           } | tee -a "$GITHUB_OUTPUT"
 
       - name: Configure git
@@ -177,6 +178,7 @@ jobs:
           REVISION: ${{ steps.settings.outputs.revision }}
           ENGINE: ${{ steps.settings.outputs.render_engine }}
           CI_OUTPUTS: ${{ steps.settings.outputs.ci_outputs }}
+          BOARDS: ${{ steps.settings.outputs.boards }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           link_base=""
@@ -186,14 +188,14 @@ jobs:
               commit) link_base="${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}" ;;
             esac
           fi
-          # Main run and assembly variants (logs in $KIBOT_LOGS/<variant>)
+          # Boards and assembly variants (logs in $KIBOT_LOGS[/<board>][/<variant>])
           appends=(--append "$KIBOT_LOGS/manufacturing_checks.md")
-          for f in "$KIBOT_LOGS"/*/manufacturing_checks.md; do
-            [[ -f "$f" ]] && appends+=(--append "$f")
-          done
+          while read -r f; do
+            appends+=(--append "$f")
+          done < <(find "$KIBOT_LOGS" -mindepth 2 -name manufacturing_checks.md | sort)
           python3 kibot_resources/scripts/ci_summary.py --variant "$VARIANT" --status "$STATUS" \
             --revision "$REVISION" --engine "$ENGINE" --link-base "$link_base" \
-            --artifacts-url "$RUN_URL" "${appends[@]}" -o "$RUNNER_TEMP/summary.md"
+            --artifacts-url "$RUN_URL" --boards "$BOARDS" "${appends[@]}" -o "$RUNNER_TEMP/summary.md"
           cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment the pull request
@@ -285,25 +287,40 @@ jobs:
           # Back to the release files for the next step
           git checkout "$release_commit"
 
+      # Release assets of each board (multi-board: `boards` setting) and of its
+      # assembly variants, in one folder
+      - name: Collect release files
+        if: github.ref_type == 'tag'
+        env:
+          BOARDS: ${{ steps.settings.outputs.boards }}
+        run: |
+          dest="$RUNNER_TEMP/release"
+          mkdir -p "$dest"
+          shopt -s nullglob
+          add() {
+            for f in "$@"; do
+              [[ -f "$f" ]] || continue
+              if [[ -e "$dest/$(basename "$f")" ]]; then
+                echo "::warning::$f not attached, same name as another release file"
+              else
+                cp "$f" "$dest/"
+              fi
+            done
+          }
+          for b in ${BOARDS:-.}; do
+            add "$b"/Schematic/*.pdf "$b"/PCB/*.pdf "$b"/Manufacturing/Assembly/* \
+                "$b"/Manufacturing/Fabrication/*.{pdf,zip,txt} "$b"/Manufacturing/JLCPCB/* \
+                "$b"/3D/*.step "$b"/Images/*.png "$b"/Testing/Testpoints/*.csv \
+                "$b"/Manufacturing/Panel/*.{zip,png}
+            add "$b"/Variants/*/Schematic/*.pdf "$b"/Variants/*/Manufacturing/Assembly/* \
+                "$b"/Variants/*/Manufacturing/JLCPCB/*.zip
+          done
+          ls "$dest"
+
       - name: Create GitHub release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v3
         with:
           name: ${{ github.ref_name }}
           body_path: ${{ runner.temp }}/release_notes.md
-          files: |
-            Schematic/*.pdf
-            PCB/*.pdf
-            Manufacturing/Assembly/*
-            Manufacturing/Fabrication/*.pdf
-            Manufacturing/Fabrication/*.zip
-            Manufacturing/Fabrication/*.txt
-            Manufacturing/JLCPCB/*
-            3D/*.step
-            Images/*.png
-            Testing/Testpoints/*.csv
-            Manufacturing/Panel/*.zip
-            Manufacturing/Panel/*.png
-            Variants/*/Schematic/*.pdf
-            Variants/*/Manufacturing/Assembly/*
-            Variants/*/Manufacturing/JLCPCB/*.zip
+          files: ${{ runner.temp }}/release/*

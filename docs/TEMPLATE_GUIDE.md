@@ -27,6 +27,7 @@ definitions.
   - [3D renders: KiCad or Blender](#3d-renders-kicad-or-blender)
   - [Shared libraries](#shared-libraries-symbols-footprints-3d-models)
   - [Assembly variants (KiCad 10)](#assembly-variants-kicad-10)
+  - [Multi-board repositories](#multi-board-repositories)
 - [Running locally (Docker)](#running-locally-docker)
 - [CI/CD on GitHub Actions](#cicd-on-github-actions)
   - [Dependency updates (Renovate)](#dependency-updates-renovate)
@@ -599,6 +600,42 @@ Run a single variant with `./run_kibot.sh -v LITE`, skip them with
 `--no-variants`. KiBot needs the variant selected on the command line to be
 declared in its configuration: `kibot_main.yaml` declares one generic `kicad`
 variant named by the `ASSEMBLY_VARIANT` definition, set by the launcher.
+
+### Multi-board repositories
+
+Several boards of one product (i.e. a main board and an I/O board) can share
+the repository, the pipeline and the version. Each KiCad project goes in its
+own folder, with its outputs:
+
+```
+CHANGELOG.md, kibot_settings.yaml, kibot_yaml/, kibot_resources/  (shared)
+hw/main/   KiCad project (+ Templates/, Logos/, Images/), kibot_board.yaml
+hw/io/     KiCad project (+ Templates/, Logos/, Images/), kibot_board.yaml
+```
+
+1. Move the KiCad project of the template (the `*.kicad_*` files, `Templates/`,
+   `Logos/`, `Images/`) into `hw/main`, copy it to `hw/io`.
+2. Name them (files, board name in `hw/io/kibot_board.yaml`):
+
+   ```
+   ./run_kibot.sh --init --dir hw/io --name io_board --board "IO board"
+   ./run_kibot.sh --init --dir hw/main --name main_board --board "Main board"
+   ```
+
+3. In `kibot_settings.yaml`: `boards: hw/main hw/io`.
+
+Each run then generates all the boards (`./run_kibot.sh --board hw/io` for
+one), each in its folder; the CI summary and pull request comment show the
+checks per board, and the release attaches the files of all the boards.
+`kibot_board.yaml` overrides `kibot_main.yaml` definitions for one board
+(`KEY: value`: `BOARD_NAME`, `PANEL_ROWS`, `RENDER_ENGINE`...). The stackup
+profiles need the board: `./run_kibot.sh --stackup jlcpcb_2l --board hw/io`.
+
+Shared by all the boards: `CHANGELOG.md` (one version for the product, one
+revision history), the settings (`panel`, `assembly_variants`: a variant is
+generated for the boards defining it), the fabrication notes and impedance
+table of `kibot_resources/templates` (boards with different stackups: keep
+them generic).
 
 ## RUNNING LOCALLY (DOCKER)
 

@@ -618,7 +618,7 @@ import:
       COMMENT: Results webpage in HTML format
       DIR: HTML
       TITLE: @BOARD_NAME@
-      LOGO: @LOGO@
+      LOGO: @PROJECT_DIR@/@LOGO@
       LOGO_URL: @GIT_URL@
 
 # ==============================================================================
@@ -634,7 +634,7 @@ definitions:
   COMPANY: Company Name
   DESIGNER: Author
 
-  LOGO: 'Logos/dummy_logo.png'
+  LOGO: 'Logos/dummy_logo.png'   # relative to the KiCad project folder
   # auto: URL of the git remote (origin), or set it explicitly
   GIT_URL: auto
 
@@ -679,6 +679,8 @@ definitions:
   # Output folder (-d) of the run, set by kibot_launch.sh: the notes are read
   # back from it (Variants/<name> for the assembly variants)
   OUTPUT_ROOT: .
+  # Folder of the KiCad project, set by kibot_launch.sh (multi-board: hw/io...)
+  PROJECT_DIR: .
 
   # Assembly variant (set by kibot_launch.sh -v NAME, see `variants:`).
   # Placeholder otherwise: not `Default`, KiBot uses the `Default` KiCad

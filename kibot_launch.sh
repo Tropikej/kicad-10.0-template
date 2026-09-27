@@ -35,6 +35,7 @@ server_flag=false
 server_port=8000
 log_dir=""
 variants_flag=true
+board=""
 stackup=""
 force_flag=false
 no_fill_flag=false
@@ -58,6 +59,8 @@ function display_help() {
     echo -e "  --skip-checks               Don't run the manufacturing checks after the generation."
     echo -e "  --no-variants               Don't generate the assembly_variants of $settings_file after"
     echo -e "                              a CHECKED / RELEASED run."
+    echo -e "  --board DIR                 Multi-board repository: only the KiCad project of DIR (outputs"
+    echo -e "                              in DIR). Default: all the 'boards' of $settings_file."
     echo -e "  --stackup NAME|list         Apply a stackup profile of kibot_resources/stackups to the PCB"
     echo -e "                              (copper layers, stackup, design rules, impedance net classes,"
     echo -e "                              zones refilled)."
@@ -68,7 +71,8 @@ function display_help() {
     echo -e "  --stop-server               Stop the running HTTP server."
     echo -e "  --init [OPTIONS]            Set the project metadata and rename the project files, asks"
     echo -e "                              when not given: --project, --board, --company, --designer,"
-    echo -e "                              --name (KiCad files name), -y (don't ask)."
+    echo -e "                              --name (KiCad files name), --dir DIR (board of a multi-board"
+    echo -e "                              repository), -y (don't ask)."
     echo -e "  -h, --help                  Display this help message."
     echo
     echo -e "RUNNER OPTIONS (run_kibot.sh / run_kibot.ps1 only)"
@@ -85,6 +89,7 @@ function display_help() {
     echo -e "  ./kibot_launch.sh -v CHECKED -r blender  All outputs, ERC/DRC, Blender renders."
     echo -e "  ./kibot_launch.sh --costs                XLSX costs spreadsheet in Manufacturing/Assembly."
     echo -e "  ./kibot_launch.sh -v LITE                Assembly variant (KiCad 10 variant), outputs in Variants/LITE."
+    echo -e "  ./kibot_launch.sh --board hw/io          Multi-board repository: only the board of hw/io."
     echo -e "  ./kibot_launch.sh --server 8080          Browse the outputs on http://localhost:8080."
     echo -e "  ./kibot_launch.sh --stackup jlcpcb_2l    Switch to the JLCPCB 2 layers stackup, rules and net classes."
     echo -e "  ./kibot_launch.sh --stackup makera_z1_2l CNC milled board (Makera Z1): unplated 2 layers, milling rules."
@@ -105,6 +110,7 @@ if [[ "$1" == --init ]]; then
 fi
 
 # Parse arguments
+all_args=("$@")
 while [[ $# -gt 0 ]]; do
     case $1 in
         --variant|-v)
@@ -124,6 +130,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-variants)
             variants_flag=false
+            ;;
+        --board)
+            if [[ -n $2 && $2 != -* ]]; then board="${2%/}"; shift
+            else echo -e "${YELLOW}Warning: --board requires a directory.${NC}"; exit 1; fi
             ;;
         --costs)
             costs_flag=true
@@ -187,6 +197,63 @@ if [[ "$server_flag" == true ]]; then
     exit 0
 fi
 
+# Multi-board repository (`boards` in kibot_settings.yaml): one run per board,
+# each KiCad project in its own folder with its outputs. The pipeline files,
+# CHANGELOG.md and the settings are shared (run from the repository root).
+boards="$(get_setting boards)"
+boards="${boards//,/ }"
+if [[ -z "$board" && -n "${boards// /}" && "$stackup" != list ]]; then
+    if [[ -n "$stackup" && "$stackup" != list ]]; then
+        echo -e "${RED}Multi-board repository: choose the board, i.e. --stackup $stackup --board ${boards%% *}${NC}"
+        exit 1
+    fi
+    failed=0
+    for b in $boards; do
+        echo -e "${GREEN}Board: $b${NC}"
+        sub_args=("${all_args[@]}" --board "$b")
+        [[ -n "$log_dir" ]] && sub_args+=(--log-dir "$log_dir/${b//\//_}")
+        if ! bash "$0" "${sub_args[@]}"; then
+            echo -e "${RED}Board $b failed${NC}"
+            failed=1
+        fi
+    done
+    exit $failed
+fi
+
+# KiCad project of this run: the one of the current directory, or of --board
+project_dir="${board:-.}"
+if [[ ! -d "$project_dir" ]]; then
+    echo -e "${RED}Board directory not found: $project_dir${NC}"
+    exit 1
+fi
+project_pro=""
+for f in "$project_dir"/*.kicad_pro; do
+    [[ -f "$f" && ! "$(basename "$f")" =~ ^kibot_.{8}\.kicad_pro$ ]] && project_pro="$f" && break
+done
+board_args=()
+if [[ -n "$board" ]]; then
+    if [[ -z "$project_pro" ]]; then
+        echo -e "${RED}No KiCad project in $board${NC}"
+        exit 1
+    fi
+    board_args=(-e "${project_pro%.kicad_pro}.kicad_sch" -b "${project_pro%.kicad_pro}.kicad_pcb")
+    # Definitions of kibot_main.yaml for this board (BOARD_NAME...): KEY: value
+    if [[ -f "$board/kibot_board.yaml" ]]; then
+        while IFS= read -r line; do
+            [[ "$line" =~ ^([A-Za-z0-9_]+):[[:space:]]*(.*)$ ]] || continue
+            key="${BASH_REMATCH[1]}"
+            value="${BASH_REMATCH[2]%%[[:space:]]#*}"
+            value="${value%"${value##*[![:space:]]}"}"
+            if [[ "$value" =~ ^\'(.*)\'$ ]]; then
+                value="${BASH_REMATCH[1]//\'\'/\'}"
+            elif [[ "$value" =~ ^\"(.*)\"$ ]]; then
+                value="${BASH_REMATCH[1]}"
+            fi
+            board_args+=(-E "$key=$value")
+        done < "$board/kibot_board.yaml"
+    fi
+fi
+
 # Fonts: the sheets use Arial / Times New Roman, not redistributable. Use the
 # metric-compatible Liberation fonts of kibot_resources/fonts under these names
 # (fontconfig rule for this process tree only, the font files are unchanged),
@@ -223,6 +290,7 @@ if [[ -n "$stackup" ]]; then
     stackup_args=("$stackup")
     if [[ "$force_flag" == true ]]; then stackup_args+=(--force); fi
     if [[ "$no_fill_flag" == true ]]; then stackup_args+=(--no-fill); fi
+    if [[ -n "$board" ]]; then stackup_args+=(-b "${project_pro%.kicad_pro}.kicad_pcb"); fi
     python3 kibot_resources/scripts/set_stackup.py "${stackup_args[@]}"
     exit $?
 fi
@@ -264,32 +332,37 @@ fi
 
 # Output directory: each assembly variant in its own Variants/<name> folder
 case "$variant" in
-    DRAFT|PRELIMINARY|CHECKED|RELEASED) output_dir="." ;;
-    *) output_dir="Variants/$variant" ;;
+    DRAFT|PRELIMINARY|CHECKED|RELEASED) output_dir="$project_dir" ;;
+    *) output_dir="$project_dir/Variants/$variant" ;;
 esac
+output_dir="${output_dir#./}"
 
 # Common KiBot arguments. --dont-stop: a failing output doesn't prevent the
 # generation of the others, --fail-on-ignored: but we still return an error.
-common_args=(-c "$kibot_config" -d "$output_dir" -g "variant=$variant" -E "REVISION=$revision"
-             -E "OUTPUT_ROOT=$output_dir" --dont-stop --fail-on-ignored)
+common_args=(-c "$kibot_config" "${board_args[@]}" -d "$output_dir" -g "variant=$variant"
+             -E "REVISION=$revision" -E "OUTPUT_ROOT=$output_dir" -E "PROJECT_DIR=$project_dir"
+             --dont-stop --fail-on-ignored)
 if [[ -n "$render_engine" ]]; then
     common_args+=(-E "RENDER_ENGINE=$render_engine")
 fi
+# Names and descriptions of the KiCad 10 variants of the project
+function project_variants() {
+    [[ -n "$project_pro" ]] || return 0
+    python3 - "$project_pro" <<'PYEOF' 2>/dev/null
+import json, sys
+for v in json.load(open(sys.argv[1], encoding='utf-8')).get('schematic', {}).get('variants', []):
+    print('{}\t{}'.format(v.get('name', ''), (v.get('description') or '').replace("'", ' ')))
+PYEOF
+}
 # Assembly variant (KiCad 10 variant of the project): declared through
 # definitions in kibot_main.yaml, with the description of the project
-if [[ "$output_dir" != . ]]; then
-    variant_comment="$(python3 - "$variant" <<'PYEOF' 2>/dev/null
-import glob, json, re, sys
-for pro in glob.glob('*.kicad_pro'):
-    if re.match(r'kibot_.{8}[.]kicad_pro$', pro):
-        continue
-    for v in json.load(open(pro, encoding='utf-8')).get('schematic', {}).get('variants', []):
-        if v.get('name') == sys.argv[1]:
-            print((v.get('description') or '').replace("'", ' '))
-PYEOF
-)"
+case "$variant" in
+    DRAFT|PRELIMINARY|CHECKED|RELEASED) ;;
+    *)
+    variant_comment="$(project_variants | awk -F '\t' -v v="$variant" '$1 == v {print $2}')"
     common_args+=(-E "ASSEMBLY_VARIANT=$variant" -E "ASSEMBLY_VARIANT_COMMENT=${variant_comment:-$variant}")
-fi
+    ;;
+esac
 # GIT_URL: auto -> URL of the git remote (https, without credentials)
 if grep -qE "^  GIT_URL:[[:space:]]*['\"]?auto['\"]?[[:space:]]*(#.*)?$" "$kibot_config"; then
     git_url="$(git remote get-url origin 2>/dev/null)"
@@ -303,7 +376,7 @@ fi
 # in the .kicad_pro are kept up to date on purpose.
 snapshot_dir="$(mktemp -d)"
 shopt -s nullglob
-design_files=(./*.kicad_pcb ./*.kicad_sch)
+design_files=("$project_dir"/*.kicad_pcb "$project_dir"/*.kicad_sch)
 shopt -u nullglob
 if [[ ${#design_files[@]} -gt 0 ]]; then
     cp -p "${design_files[@]}" "$snapshot_dir/"
@@ -320,7 +393,7 @@ trap restore_design_files EXIT
 # Netlist XML of the schematic: the cover page index (set_text_variables) reads
 # it before the update_xml preflight regenerates it, so it must exist before
 # KiBot starts (fresh checkout, CI)
-for pro in ./*.kicad_pro; do
+for pro in "$project_dir"/*.kicad_pro; do
     [[ -f "$pro" && ! "$(basename "$pro")" =~ ^kibot_.{8}\.kicad_pro$ ]] || continue
     sch="${pro%.kicad_pro}.kicad_sch"
     if [[ -f "$sch" ]] && ! kicad-cli sch export python-bom -o "${sch%.kicad_sch}.xml" "$sch" >/dev/null 2>&1; then
@@ -367,7 +440,7 @@ if [[ "$costs_flag" != true && "$(get_setting panel)" == true ]]; then
         PRELIMINARY|CHECKED|RELEASED)
             rm -rf "$output_dir/Manufacturing/Panel"
             if run_kibot panel --skip-pre all panel_group; then
-                panel_pcb="$(find "$output_dir" -name '*-panel.kicad_pcb' -not -path '*/Variants/*' | head -n1)"
+                panel_pcb="$(find "$output_dir/Manufacturing/Panel" -name '*-panel.kicad_pcb' | head -n1)"
                 if [[ -n "$panel_pcb" ]]; then
                     cmd=(kibot -c kibot_yaml/kibot_panel.yaml -b "$panel_pcb" -e "" -d "$output_dir" --dont-stop)
                     [[ -n "$log_dir" ]] && cmd=(kibot --log "$log_dir/kibot_panel_files.log" "${cmd[@]:1}")
@@ -417,9 +490,10 @@ if [[ "$costs_flag" != true && "$check_flag" == true ]]; then
     if [[ -n "$log_dir" ]]; then
         check_args+=(--markdown "$(pwd)/$log_dir/manufacturing_checks.md")
     fi
-    if [[ "$output_dir" != . ]]; then
-        check_args+=(--title "Manufacturing checks: variant $variant")
-    fi
+    title="Manufacturing checks"
+    [[ -n "$board" ]] && title+=": $board"
+    [[ "$output_dir" == */Variants/* || "$output_dir" == Variants/* ]] && title+=" (variant $variant)"
+    check_args+=(--title "$title")
     echo -e "${GREEN}Running: manufacturing checks${NC}"
     python3 kibot_resources/scripts/check_manufacturing.py "${check_args[@]}"
     ret=$?
@@ -433,9 +507,16 @@ fi
 # one run per variant (outputs in Variants/<name>, logs in <log dir>/<name>)
 if [[ "$costs_flag" != true && "$variants_flag" == true && ( "$variant" == CHECKED || "$variant" == RELEASED ) ]]; then
     assembly_variants="$(get_setting assembly_variants)"
+    declared=" $(project_variants | cut -f1 | tr '\n' ' ') "
     for av in ${assembly_variants//,/ }; do
+        if [[ "$declared" != *" $av "* ]]; then
+            # Multi-board: the variant belongs to another board
+            echo -e "${YELLOW}Assembly variant $av: not defined in $project_pro, skipped${NC}"
+            continue
+        fi
         echo -e "${GREEN}Assembly variant: $av${NC}"
         sub_args=(-v "$av")
+        [[ -n "$board" ]] && sub_args+=(--board "$board")
         [[ -n "$revision" ]] && sub_args+=(--version "$revision")
         [[ -n "$render_engine" ]] && sub_args+=(-r "$render_engine")
         [[ "$check_flag" != true ]] && sub_args+=(--skip-checks)
@@ -449,6 +530,7 @@ fi
 
 # Remove the temporary project copies KiBot may leave behind
 rm -f kibot_????????.kicad_{pcb,pro,prl,dru,sch} ./*.kicad_pcb-bak ./*.kicad_pro-bak ./~*.lck
+rm -f "$project_dir"/kibot_????????.kicad_{pcb,pro,prl,dru,sch} "$project_dir"/*.kicad_pcb-bak "$project_dir"/*.kicad_pro-bak
 
 # Give the generated files back to the host user (Linux hosts, see run_kibot.sh)
 if [[ -n "$HOST_UID" && -n "$HOST_GID" && "$(id -u)" == "0" ]]; then

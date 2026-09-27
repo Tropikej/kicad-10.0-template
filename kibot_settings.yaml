@@ -24,6 +24,13 @@ variant: DRAFT
 # releases. Empty: none.
 assembly_variants:
 
+# Multi-board repository: folders of the KiCad projects, space-separated,
+# i.e. `boards: hw/main hw/io`. Each board gets its outputs in its folder
+# (run one with ./run_kibot.sh --board hw/io). CHANGELOG.md, the version,
+# the settings and the pipeline (kibot_yaml, kibot_resources) are shared.
+# Empty: single project at the repository root.
+boards:
+
 # Panel of the board made with KiKit (true | false), for the PRELIMINARY /
 # CHECKED / RELEASED runs: Manufacturing/Panel (panel PCB, preview, Gerbers +
 # drill ZIP). Layout (rows, columns, mouse bites / V-cuts, rails...): PANEL_*

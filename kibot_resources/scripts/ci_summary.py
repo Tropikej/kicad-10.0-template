@@ -5,6 +5,7 @@ status, ERC/DRC results from the Reports folder and the generated documents.
 
 Usage: ci_summary.py --variant V [--status success|failure] [--revision R]
                      [--engine E] [--link-base URL] [--artifacts-url URL] [-o FILE]
+                     [--boards "hw/main hw/io"] [--append FILE.md]...
 """
 import argparse
 import collections
@@ -51,36 +52,20 @@ def parse_report(fname):
 
 
 def link(path, base):
+    path = os.path.normpath(path)
     name = os.path.basename(path)
     if base:
         return '[{}]({}/{})'.format(name, base.rstrip('/'), path.replace(os.sep, '/').replace(' ', '%20'))
     return '`{}`'.format(name)
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Markdown summary of a KiBot run')
-    parser.add_argument('--variant', required=True)
-    parser.add_argument('--status', default='success')
-    parser.add_argument('--revision', default='')
-    parser.add_argument('--engine', default='')
-    parser.add_argument('--link-base', default='', help='URL prefix to link the files (i.e. outputs branch)')
-    parser.add_argument('--artifacts-url', default='', help='URL of the run artifacts')
-    parser.add_argument('-o', '--output', help='Output file (default: stdout)')
-    parser.add_argument('--append', action='append', default=[], help='Markdown file(s) to append, if they exist')
-    args = parser.parse_args()
+def board_summary(board, args):
+    """ ERC/DRC and documents of one board (its output folder) """
+    def files(pattern):
+        return sorted(f for f in glob.glob(os.path.join(board, pattern)) if os.path.isfile(f))
 
-    ok = args.status == 'success'
-    out = [MARKER, '## {} KiBot: {}'.format('✅' if ok else '❌', args.variant), '']
-    info = [('Status', 'success' if ok else '**' + args.status + '**')]
-    if args.revision:
-        info.append(('Revision', args.revision))
-    if args.engine:
-        info.append(('3D renders', args.engine))
-    if args.artifacts_url:
-        info.append(('Artifacts', '[outputs and logs]({})'.format(args.artifacts_url)))
-    out += ['| | |', '| --- | --- |'] + ['| {} | {} |'.format(k, v) for k, v in info] + ['']
-
-    reports = sorted(glob.glob('Reports/*-erc.rpt')) + sorted(glob.glob('Reports/*-drc.rpt'))
+    out = []
+    reports = files('Reports/*-erc.rpt') + files('Reports/*-drc.rpt')
     if reports:
         out += ['### Electrical and design rules checks', '',
                 '| Check | Errors | Warnings | Report |', '| --- | --- | --- | --- |']
@@ -106,11 +91,44 @@ def main():
 
     docs = []
     for label, pattern in DOCS:
-        files = sorted(f for f in glob.glob(pattern) if os.path.isfile(f))
-        if files:
-            docs.append('| {} | {} |'.format(label, ' · '.join(link(f, args.link_base) for f in files[:6])))
+        found = files(pattern)
+        if found:
+            docs.append('| {} | {} |'.format(label, ' · '.join(link(f, args.link_base)
+                                                                 for f in found[:6])))
     if docs:
         out += ['### Documents', '', '| Document | Files |', '| --- | --- |'] + docs + ['']
+    return out
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Markdown summary of a KiBot run')
+    parser.add_argument('--variant', required=True)
+    parser.add_argument('--status', default='success')
+    parser.add_argument('--revision', default='')
+    parser.add_argument('--engine', default='')
+    parser.add_argument('--link-base', default='', help='URL prefix to link the files (i.e. outputs branch)')
+    parser.add_argument('--artifacts-url', default='', help='URL of the run artifacts')
+    parser.add_argument('-o', '--output', help='Output file (default: stdout)')
+    parser.add_argument('--append', action='append', default=[], help='Markdown file(s) to append, if they exist')
+    parser.add_argument('--boards', default='', help='Multi-board: folders of the boards (space-separated)')
+    args = parser.parse_args()
+
+    ok = args.status == 'success'
+    out = [MARKER, '## {} KiBot: {}'.format('✅' if ok else '❌', args.variant), '']
+    info = [('Status', 'success' if ok else '**' + args.status + '**')]
+    if args.revision:
+        info.append(('Revision', args.revision))
+    if args.engine:
+        info.append(('3D renders', args.engine))
+    if args.artifacts_url:
+        info.append(('Artifacts', '[outputs and logs]({})'.format(args.artifacts_url)))
+    out += ['| | |', '| --- | --- |'] + ['| {} | {} |'.format(k, v) for k, v in info] + ['']
+
+    boards = args.boards.replace(',', ' ').split() or ['.']
+    for board in boards:
+        if len(boards) > 1:
+            out += ['## Board `{}`'.format(board), '']
+        out += board_summary(board, args)
 
     for extra in args.append:
         if os.path.isfile(extra):
