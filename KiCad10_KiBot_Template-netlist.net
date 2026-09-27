@@ -1,0 +1,486 @@
+(export
+	(version "E")
+	(design
+		(source "/project/KiCad10_KiBot_Template.kicad_sch")
+		(date "2026-09-27T11:12:11")
+		(tool "Eeschema 10.0.5-unknown-202607221313~667fa36054~ubuntu25.10.1")
+		(textvar
+			(name "ASSEMBLY_NOTES")
+		)
+		(textvar
+			(name "BOARD_NAME") "Board Name")
+		(textvar
+			(name "COMPANY") "Company Name")
+		(textvar
+			(name "DESIGNER") "Author")
+		(textvar
+			(name "FABRICATION_NOTES")
+		)
+		(textvar
+			(name "GIT_HASH_PCB") "56fc348")
+		(textvar
+			(name "GIT_HASH_SCH") "56fc348")
+		(textvar
+			(name "GIT_URL") "https://github.com/your-user/your-repo")
+		(textvar
+			(name "PROJECT_NAME") "Project Name")
+		(textvar
+			(name "RELEASE_BODY_1.0.0")
+		)
+		(textvar
+			(name "RELEASE_BODY_1.0.1")
+		)
+		(textvar
+			(name "RELEASE_BODY_1.0.2")
+		)
+		(textvar
+			(name "RELEASE_BODY_1.1.0")
+		)
+		(textvar
+			(name "RELEASE_BODY_UNRELEASED") "___________________________________\n\nFixed\n\n-   Fixes\n\n___________________________________\n\nAdded\n\n-   Additions\n\n___________________________________\n\nChanged\n\n-   Changes\n\n___________________________________\n\nRemoved\n\n-   Deletions")
+		(textvar
+			(name "RELEASE_DATE") "27-Sep-2026")
+		(textvar
+			(name "RELEASE_DATE_NUM") "2026-09-27")
+		(textvar
+			(name "RELEASE_TITLE_1.0.0")
+		)
+		(textvar
+			(name "RELEASE_TITLE_1.0.1")
+		)
+		(textvar
+			(name "RELEASE_TITLE_1.0.2")
+		)
+		(textvar
+			(name "RELEASE_TITLE_1.1.0")
+		)
+		(textvar
+			(name "RELEASE_TITLE_UNRELEASED") "Version Unreleased")
+		(textvar
+			(name "REVISION") "(Unreleased)")
+		(textvar
+			(name "SHEET_NAME_1") "Cover Page")
+		(textvar
+			(name "SHEET_NAME_10") "......................................")
+		(textvar
+			(name "SHEET_NAME_11") "......................................")
+		(textvar
+			(name "SHEET_NAME_12") "......................................")
+		(textvar
+			(name "SHEET_NAME_13") "......................................")
+		(textvar
+			(name "SHEET_NAME_14") "......................................")
+		(textvar
+			(name "SHEET_NAME_15") "......................................")
+		(textvar
+			(name "SHEET_NAME_16") "......................................")
+		(textvar
+			(name "SHEET_NAME_17") "......................................")
+		(textvar
+			(name "SHEET_NAME_18") "......................................")
+		(textvar
+			(name "SHEET_NAME_19") "......................................")
+		(textvar
+			(name "SHEET_NAME_2") "Block Diagram")
+		(textvar
+			(name "SHEET_NAME_20") "......................................")
+		(textvar
+			(name "SHEET_NAME_21") "......................................")
+		(textvar
+			(name "SHEET_NAME_22") "......................................")
+		(textvar
+			(name "SHEET_NAME_23") "......................................")
+		(textvar
+			(name "SHEET_NAME_24") "......................................")
+		(textvar
+			(name "SHEET_NAME_25") "......................................")
+		(textvar
+			(name "SHEET_NAME_26") "......................................")
+		(textvar
+			(name "SHEET_NAME_27") "......................................")
+		(textvar
+			(name "SHEET_NAME_28") "......................................")
+		(textvar
+			(name "SHEET_NAME_29") "......................................")
+		(textvar
+			(name "SHEET_NAME_3") "Project Architecture")
+		(textvar
+			(name "SHEET_NAME_30") "......................................")
+		(textvar
+			(name "SHEET_NAME_31") "......................................")
+		(textvar
+			(name "SHEET_NAME_32") "......................................")
+		(textvar
+			(name "SHEET_NAME_33") "......................................")
+		(textvar
+			(name "SHEET_NAME_34") "......................................")
+		(textvar
+			(name "SHEET_NAME_35") "......................................")
+		(textvar
+			(name "SHEET_NAME_36") "......................................")
+		(textvar
+			(name "SHEET_NAME_37") "......................................")
+		(textvar
+			(name "SHEET_NAME_38") "......................................")
+		(textvar
+			(name "SHEET_NAME_39") "......................................")
+		(textvar
+			(name "SHEET_NAME_4") "Section A - Title A")
+		(textvar
+			(name "SHEET_NAME_40") "......................................")
+		(textvar
+			(name "SHEET_NAME_5") "Section B - Title B")
+		(textvar
+			(name "SHEET_NAME_6") "Power - Sequencing")
+		(textvar
+			(name "SHEET_NAME_7") "Revision History")
+		(textvar
+			(name "SHEET_NAME_8") "......................................")
+		(textvar
+			(name "SHEET_NAME_9") "......................................")
+		(textvar
+			(name "VARIANT") "DRAFT")
+		(sheet
+			(number "1")
+			(name "/")
+			(tstamps "/")
+			(title_block
+				(title)
+				(company "Company Name")
+				(rev "(Unreleased)")
+				(date "2025-01-12")
+				(source "KiCad10_KiBot_Template.kicad_sch")
+				(comment
+					(number "1")
+					(value "")
+				)
+				(comment
+					(number "2")
+					(value "")
+				)
+				(comment
+					(number "3")
+					(value "")
+				)
+				(comment
+					(number "4")
+					(value "")
+				)
+				(comment
+					(number "5")
+					(value "")
+				)
+				(comment
+					(number "6")
+					(value "")
+				)
+				(comment
+					(number "7")
+					(value "")
+				)
+				(comment
+					(number "8")
+					(value "")
+				)
+				(comment
+					(number "9")
+					(value "")
+				)
+			)
+		)
+		(sheet
+			(number "2")
+			(name "/Block Diagram/")
+			(tstamps "/82da9dbf-ba38-4d08-ba35-a220fa2963b1/")
+			(title_block
+				(title "Block Diagram")
+				(company "Company Name")
+				(rev "(Unreleased)")
+				(date "2025-01-12")
+				(source "Block Diagram.kicad_sch")
+				(comment
+					(number "1")
+					(value "")
+				)
+				(comment
+					(number "2")
+					(value "")
+				)
+				(comment
+					(number "3")
+					(value "")
+				)
+				(comment
+					(number "4")
+					(value "")
+				)
+				(comment
+					(number "5")
+					(value "")
+				)
+				(comment
+					(number "6")
+					(value "")
+				)
+				(comment
+					(number "7")
+					(value "")
+				)
+				(comment
+					(number "8")
+					(value "")
+				)
+				(comment
+					(number "9")
+					(value "")
+				)
+			)
+		)
+		(sheet
+			(number "3")
+			(name "/Project Architecture/")
+			(tstamps "/c5103ceb-5325-4a84-a025-9638a412984e/")
+			(title_block
+				(title "Project Architecture")
+				(company "Company Name")
+				(rev "(Unreleased)")
+				(date "2025-01-12")
+				(source "Project Architecture.kicad_sch")
+				(comment
+					(number "1")
+					(value "")
+				)
+				(comment
+					(number "2")
+					(value "")
+				)
+				(comment
+					(number "3")
+					(value "")
+				)
+				(comment
+					(number "4")
+					(value "")
+				)
+				(comment
+					(number "5")
+					(value "")
+				)
+				(comment
+					(number "6")
+					(value "")
+				)
+				(comment
+					(number "7")
+					(value "")
+				)
+				(comment
+					(number "8")
+					(value "")
+				)
+				(comment
+					(number "9")
+					(value "")
+				)
+			)
+		)
+		(sheet
+			(number "4")
+			(name "/Project Architecture/Section A - Title A/")
+			(tstamps "/c5103ceb-5325-4a84-a025-9638a412984e/f06537ee-772d-44d3-8c50-e0ba41038c9c/")
+			(title_block
+				(title "Sheet Title A")
+				(company "Company Name")
+				(rev "(Unreleased)")
+				(date "2025-01-12")
+				(source "Section A - Title A.kicad_sch")
+				(comment
+					(number "1")
+					(value "")
+				)
+				(comment
+					(number "2")
+					(value "")
+				)
+				(comment
+					(number "3")
+					(value "")
+				)
+				(comment
+					(number "4")
+					(value "")
+				)
+				(comment
+					(number "5")
+					(value "")
+				)
+				(comment
+					(number "6")
+					(value "")
+				)
+				(comment
+					(number "7")
+					(value "")
+				)
+				(comment
+					(number "8")
+					(value "")
+				)
+				(comment
+					(number "9")
+					(value "")
+				)
+			)
+		)
+		(sheet
+			(number "5")
+			(name "/Project Architecture/Section B - Title B/")
+			(tstamps "/c5103ceb-5325-4a84-a025-9638a412984e/e744f3ce-03a6-44a6-8792-1447ef232b9a/")
+			(title_block
+				(title "Sheet Title B")
+				(company "Company Name")
+				(rev "(Unreleased)")
+				(date "2025-01-12")
+				(source "Section B - Title B.kicad_sch")
+				(comment
+					(number "1")
+					(value "")
+				)
+				(comment
+					(number "2")
+					(value "")
+				)
+				(comment
+					(number "3")
+					(value "")
+				)
+				(comment
+					(number "4")
+					(value "")
+				)
+				(comment
+					(number "5")
+					(value "")
+				)
+				(comment
+					(number "6")
+					(value "")
+				)
+				(comment
+					(number "7")
+					(value "")
+				)
+				(comment
+					(number "8")
+					(value "")
+				)
+				(comment
+					(number "9")
+					(value "")
+				)
+			)
+		)
+		(sheet
+			(number "6")
+			(name "/Power - Sequencing/")
+			(tstamps "/5fb05893-0da3-4f58-a52b-cb6d6f4cb80b/")
+			(title_block
+				(title "Power - Sequencing")
+				(company "Company Name")
+				(rev "(Unreleased)")
+				(date "2025-01-12")
+				(source "Power - Sequencing.kicad_sch")
+				(comment
+					(number "1")
+					(value "")
+				)
+				(comment
+					(number "2")
+					(value "")
+				)
+				(comment
+					(number "3")
+					(value "")
+				)
+				(comment
+					(number "4")
+					(value "")
+				)
+				(comment
+					(number "5")
+					(value "")
+				)
+				(comment
+					(number "6")
+					(value "")
+				)
+				(comment
+					(number "7")
+					(value "")
+				)
+				(comment
+					(number "8")
+					(value "")
+				)
+				(comment
+					(number "9")
+					(value "")
+				)
+			)
+		)
+		(sheet
+			(number "7")
+			(name "/Revision History/")
+			(tstamps "/6e125bd6-2f99-4e5d-b3ea-4899f4540739/")
+			(title_block
+				(title "Revision History")
+				(company "Company Name")
+				(rev "(Unreleased)")
+				(date "2025-01-12")
+				(source "Revision History.kicad_sch")
+				(comment
+					(number "1")
+					(value "")
+				)
+				(comment
+					(number "2")
+					(value "")
+				)
+				(comment
+					(number "3")
+					(value "")
+				)
+				(comment
+					(number "4")
+					(value "")
+				)
+				(comment
+					(number "5")
+					(value "")
+				)
+				(comment
+					(number "6")
+					(value "")
+				)
+				(comment
+					(number "7")
+					(value "")
+				)
+				(comment
+					(number "8")
+					(value "")
+				)
+				(comment
+					(number "9")
+					(value "")
+				)
+			)
+		)
+	)
+	(components)
+	(groups)
+	(variants)
+	(libparts)
+	(libraries)
+	(nets)
+)
