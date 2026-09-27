@@ -105,12 +105,20 @@ The project status (KiBot *variant*) selects the generated outputs:
 
 ## GETTING STARTED
 
-1. Copy (or clone) this template in your KiCad templates folder:
+1. Install this template in your KiCad user templates folder
+   (`KICAD_USER_TEMPLATE_DIR`, see *Preferences → Configure Paths*):
 
-   - **Windows**: `%APPDATA%\kicad\10.0\template` (user templates) or
-     `C:\Program Files\KiCad\10.0\share\kicad\template`
+   - **Windows**: `%USERPROFILE%\Documents\KiCad\10.0\template`
    - **Linux**: `~/.local/share/kicad/10.0/template`
    - **macOS**: `~/Documents/KiCad/10.0/template`
+
+   Export the committed files only (no `.git`, no generated outputs, which
+   KiCad would copy into every new project):
+
+   ```
+   mkdir -p ~/Documents/KiCad/10.0/template/KiCad10_KiBot_Template
+   git archive HEAD | tar -x -C ~/Documents/KiCad/10.0/template/KiCad10_KiBot_Template
+   ```
 
 2. Copy the color theme
    [`kibot_resources/colors/Altium_Theme.json`](../kibot_resources/colors/Altium_Theme.json)
