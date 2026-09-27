@@ -27,6 +27,7 @@ definitions.
   - [Shared libraries](#shared-libraries-symbols-footprints-3d-models)
 - [Running locally (Docker)](#running-locally-docker)
 - [CI/CD on GitHub Actions](#cicd-on-github-actions)
+  - [Dependency updates (Renovate)](#dependency-updates-renovate)
 - [Project conversion guide](#project-conversion-guide)
 - [Directory structure](#directory-structure)
 - [Troubleshooting](#troubleshooting)
@@ -685,6 +686,24 @@ to v4 for local tests. The commit steps really push to `origin`.
 
 - After a release: `git pull` on `main`, then `git checkout dev && git rebase main`.
 
+### Dependency updates (Renovate)
+
+The KiBot image is pinned in `kibot_settings.yaml` (reproducible outputs) and
+the actions in the workflow. [`.github/renovate.json`](../.github/renovate.json)
+lets [Renovate](https://docs.renovatebot.com/) open a pull request on Mondays
+when a new version is out:
+
+- **KiBot image**: new KiBot versions and KiCad 10.0.x patches (tags ordered
+  by KiBot version, KiCad patch, image build). KiCad 10.1+ changes the file
+  formats and is never proposed: migrate by hand. `dev_` tags are ignored.
+- **GitHub Actions**: grouped in one pull request.
+
+The pull request check generates the outputs with the new version: read its
+comment and compare the artifacts before merging. To enable it, install the
+free [Renovate GitHub app](https://github.com/apps/renovate) on the
+repository; it opens an onboarding pull request first. To disable it, delete
+`.github/renovate.json`.
+
 ## PROJECT CONVERSION GUIDE
 
 To use this pipeline with an existing KiCad 10 project, copy `kibot_yaml/`,
@@ -737,7 +756,7 @@ board. Testpoints are the symbols with a `TP` reference.
 ## DIRECTORY STRUCTURE
 
 ```
-├─ .github/workflows  # GitHub Actions workflow
+├─ .github           # GitHub Actions workflow, Renovate configuration
 ├─ 3D                 # STEP / PCB3D models (generated)
 ├─ Computations       # Misc calculations (optional)
 ├─ docs               # This guide
