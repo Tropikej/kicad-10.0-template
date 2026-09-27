@@ -83,6 +83,11 @@ jobs:
           # The libraries declared in kibot_settings.yaml must be there
           ./run_kibot.sh --check-libs
 
+      # docs/CONFIG_REFERENCE.md is generated from the comments of the settings
+      # and definitions: fail if a new one has no comment or if it is outdated
+      - name: Check the configuration reference
+        run: python3 kibot_resources/scripts/gen_config_reference.py --check
+
       - name: Read settings
         id: settings
         run: |

@@ -858,9 +858,10 @@ board. Testpoints are the symbols with a `TP` reference.
 
 ```
 ├─ .github           # GitHub Actions workflow, Renovate configuration
+├─ AGENTS.md          # Instructions for coding agents (CLAUDE.md points to it)
 ├─ 3D                 # STEP / PCB3D models (generated)
 ├─ Computations       # Misc calculations (optional)
-├─ docs               # This guide
+├─ docs               # This guide, CONFIG_REFERENCE.md (generated reference)
 ├─ HTML               # Web page to browse the outputs (generated)
 ├─ Images             # Pictures and 3D renders
 ├─ kibot_resources

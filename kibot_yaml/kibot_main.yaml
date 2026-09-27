@@ -628,11 +628,11 @@ definitions:
 
   # Metadata ===================================================================
 
-  PROJECT_NAME: Project Name
-  BOARD_NAME: Board Name
+  PROJECT_NAME: Project Name   # product/project, in the title blocks and README
+  BOARD_NAME: Board Name       # this PCB, in the title blocks, documents and panel rail
 
-  COMPANY: Company Name
-  DESIGNER: Author
+  COMPANY: Company Name        # title blocks, fabrication notes
+  DESIGNER: Author             # title blocks
 
   LOGO: 'Logos/dummy_logo.png'   # relative to the KiCad project folder
   # auto: URL of the git remote (origin), or set it explicitly
@@ -644,13 +644,16 @@ definitions:
 
   # Preflight ==================================================================
 
+  # DRC: refill the zones before checking. false: check the fills saved in the
+  # PCB, the ones the Gerbers use (refill in KiCad, or --stackup does it)
   CHECK_ZONE_FILLS: false
+  # Note under the stackup table of the fabrication document
   STACKUP_TABLE_NOTE: external layer thicknesses are specified after plating
 
   # BoM ========================================================================
 
-  MPN_FIELD: 'Manufacturer Part Number'
-  MAN_FIELD: 'Manufacturer'
+  MPN_FIELD: 'Manufacturer Part Number'   # symbol field with the part number (BoM grouping)
+  MAN_FIELD: 'Manufacturer'               # symbol field with the manufacturer
 
   # Drill table and drill map parameters =======================================
 
@@ -664,10 +667,10 @@ definitions:
 
   # PDF documents parameters ===================================================
 
-  COLOR_THEME: Altium_Theme
-  SHEET_WKS: ${KIPRJMOD}/Templates/Template_PCB_GIT_A4.kicad_wks
-  FAB_SCALING: 1
-  ASSEMBLY_SCALING: 1
+  COLOR_THEME: Altium_Theme   # KiCad color theme of the PCB PDFs (kibot_resources/colors)
+  SHEET_WKS: ${KIPRJMOD}/Templates/Template_PCB_GIT_A4.kicad_wks   # drawing sheet of the PCB PDFs
+  FAB_SCALING: 1          # fabrication document, board drawing scale
+  ASSEMBLY_SCALING: 1     # assembly document, board drawing scale
   ROUTING_SCALING: 0      # PCB routing PDF, 0 = fit the page
   GERBERS_PDF_SCALING: 0  # Gerbers PDF, 0 = fit the page
   GERBERS_PDF_MONOCHROME: false  # Gerbers PDF in gray scale instead of colors
@@ -676,15 +679,16 @@ definitions:
 
   EXCLUDE_REFS: '[MB*]' # for components on the PCB but not on the schematic
 
-  # Output folder (-d) of the run, set by kibot_launch.sh: the notes are read
-  # back from it (Variants/<name> for the assembly variants)
-  OUTPUT_ROOT: .
-  # Folder of the KiCad project, set by kibot_launch.sh (multi-board: hw/io...)
-  PROJECT_DIR: .
+  # Set by kibot_launch.sh =====================================================
+  # Given by the launcher on the command line (-E), don't change them here:
+  # OUTPUT_ROOT = output folder of the run (the notes are read back from it,
+  # Variants/<name> for an assembly variant), PROJECT_DIR = folder of the KiCad
+  # project (multi-board), ASSEMBLY_VARIANT(_COMMENT) = assembly variant of the
+  # run (-v NAME) and its description. The placeholder must not be `Default`:
+  # KiBot uses the `Default` KiCad variant for the outputs without variant.
 
-  # Assembly variant (set by kibot_launch.sh -v NAME, see `variants:`).
-  # Placeholder otherwise: not `Default`, KiBot uses the `Default` KiCad
-  # variant for the outputs without variant.
+  OUTPUT_ROOT: .
+  PROJECT_DIR: .
   ASSEMBLY_VARIANT: NO_ASSEMBLY_VARIANT
   ASSEMBLY_VARIANT_COMMENT: Unused
 
@@ -711,6 +715,7 @@ definitions:
   BLENDER_3D_ROT_Y: -10
   BLENDER_3D_ROT_Z: 10
   BLENDER_3D_ROT_Z_BOTTOM: -10
+
   BLENDER_SAMPLES: 50        # Blender engine only: 10 = draft, 100+ = final
 
   # JLCPCB =====================================================================
@@ -725,8 +730,8 @@ definitions:
   # customer). Rails top/bottom with tooling holes and fiducials, board title
   # and revision on the top rail.
   PANEL_CUTS: mousebites     # mousebites (any shape) | vcuts (rectangles only)
-  PANEL_ROWS: 2
-  PANEL_COLS: 2
+  PANEL_ROWS: 2              # boards per column
+  PANEL_COLS: 2              # boards per row
   PANEL_SPACE: 2             # mm between boards (mousebites only)
   PANEL_TAB_WIDTH: 3         # mm (mousebites only)
   PANEL_TAB_COUNT: 2         # tabs per board edge (mousebites only)
@@ -735,14 +740,14 @@ definitions:
 
   # KiRI (visual diff between commits) =========================================
 
-  KIRI_MAX_COMMITS: 5
+  KIRI_MAX_COMMITS: 5   # commits compared in the KiRI page
 
   # Output directories =========================================================
+  # Folders of the outputs, relative to the output folder of the run (the
+  # project, Variants/<name> or a board folder). The documents, README, CI
+  # summary and release step expect these defaults.
 
-  # Root
   OUTPUT_DIR: ./
-
-  # Relative to root
   REPORT_DIR: Reports
   SCHEMATIC_DIR: Schematic
   PCB_DIR: PCB
@@ -761,7 +766,9 @@ definitions:
   REPORT_TEMPLATE_DIR: '@RESOURCES_DIR@/templates'
   SCRIPTS_DIR: '@RESOURCES_DIR@/scripts'
 
-  # Layer names. Should match user-defined names in the PCB.  ==================
+  # Layer names ================================================================
+  # User layers of the PCB used by the documents (title page, DNP marks, drill
+  # map, test point lists, assembly texts): must match the PCB layer names.
 
   LAYER_TITLE_PAGE: TitlePage
   LAYER_DNP_TOP: F.DNP
@@ -775,6 +782,7 @@ definitions:
   LAYER_DNP_CROSS_BOTTOM: B.DNP
 
   # Filters names ==============================================================
+  # Names of the KiBot filters (kibot_filt_*.yaml) used by the outputs.
 
   FILT_FIELD_RENAME: field_rename
   FILT_TP_ONLY: only_testpoints
