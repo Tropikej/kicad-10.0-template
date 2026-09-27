@@ -1,4 +1,6 @@
-# KiBot output: interactive schematic viewer in the browser (KiCanvas)
+# KiBot output: interactive schematic/PCB viewer in the browser (KiCanvas)
+# Disabled (commented in all_group of kibot_main.yaml): KiCanvas (2026-04)
+# can't parse KiCad 10 PCBs. The interactive BoM shows the PCB instead.
 # Needs an HTTP server (browsers block local files): ./run_kibot.sh --serve
 # https://kibot.readthedocs.io/en/latest/configuration/outputs/kicanvas.html
 
@@ -14,9 +16,7 @@ outputs:
   options:
     dnf_filter: _kibom_dnf_Config
     overlay: true
-    # KiCanvas (2026-04) can't parse KiCad 10 PCBs (gr_text render cache): the
-    # PCB is in the interactive BoM and KiRI. Add "pcb" when KiCanvas supports it.
-    source: ["schematic", "project"]
+    source: ["schematic", "pcb", "project"]
 
 definitions:
   NAME: html_kicanvas

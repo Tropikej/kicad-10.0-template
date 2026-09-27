@@ -62,8 +62,8 @@ definitions.
   Blender (photo-realistic)**, selected with one parameter.
 - Gerbers, drill files, ODB++, STEP, BoM (CSV, HTML, interactive HTML,
   XLSX with costs), pick and place, testpoint lists, ERC/DRC reports.
-- **Automated README.md**, **KiRI** visual diff between commits, **KiCanvas**
-  interactive schematic viewer and a **web page** to browse all the outputs.
+- **Automated README.md**, **KiRI** visual diff between commits and a
+  **web page** to browse all the outputs.
 - **Same pipeline locally and in CI**: `kibot_launch.sh` runs inside the
   `ghcr.io/inti-cmnb/kicad10_auto_full` image in both cases.
 - **Releases**: pushing a semantic version tag generates the `RELEASED`
@@ -92,7 +92,7 @@ The project status (KiBot *variant*) selects the generated outputs:
 | JLCPCB files: Gerbers ZIP, BoM, pick and place (`Manufacturing/JLCPCB/`) | | ✅ | ✅ | ✅ |
 | 3D renders PNG (`Images/`), STEP (`3D/`) | | ✅ | ✅ | ✅ |
 | Testpoint lists (`Testing/`) | | ✅ | ✅ | ✅ |
-| KiRI diff viewer, KiCanvas schematic viewer, HTML navigation page | | ✅ | ✅ | ✅ |
+| KiRI diff viewer, HTML navigation page | | ✅ | ✅ | ✅ |
 | ERC / DRC reports (`Reports/`) | | | ✅ | ✅ |
 | GitHub release with assets | | | | ✅ (tag) |
 
@@ -672,15 +672,13 @@ KiBot.
 | --- | --- | --- |
 | `index.html` | Every output, with previews | `./run_kibot.sh --serve`, then http://localhost:8000 |
 | `Manufacturing/Assembly/<name>-ibom.html` | Interactive BoM: PCB top/bottom, click a BoM line to highlight the parts (pin 1 marked), checkboxes for hand assembly | Double-click it (self-contained, works offline) |
-| `KiCanvas/<name>-kicanvas.html` | Interactive schematic: all the sheets, zoom, click a symbol for its properties | `./run_kibot.sh --serve`, then http://localhost:8000/KiCanvas/ (browsers block local files) |
 | `KiRI/index.html` | Schematic and PCB of the last commits, with a visual diff | `./run_kibot.sh --serve` |
 
-The KiCanvas viewer has limits with KiCad 10 files: it can't read KiCad 10
-PCBs (the PCB is in the interactive BoM and KiRI), the sheets whose file name
-contains spaces are listed apart from the hierarchy, and the title blocks show
-the text variables unexpanded. The PDFs remain the reference documents. On
-GitHub, download the run artifacts or the `kibot-outputs` branch and serve
-them locally (GitHub doesn't serve HTML pages from a branch). If KiCad 10 and KiBot are installed natively, `./kibot_launch.sh` can
+The KiCanvas viewer (interactive schematic and PCB) is configured but
+disabled: KiCanvas can't read KiCad 10 PCBs yet. To try it, uncomment
+`@HTML_KICANVAS_OUTPUT@` in `all_group` of `kibot_main.yaml`. On GitHub,
+download the run artifacts or the `kibot-outputs` branch and serve them
+locally (GitHub doesn't serve HTML pages from a branch). If KiCad 10 and KiBot are installed natively, `./kibot_launch.sh` can
 be used directly with the same options.
 
 Environment variables of the runners:
@@ -886,7 +884,6 @@ board. Testpoints are the symbols with a `TP` reference.
 │  ├─ scripts         # Scripts used by the text variables
 │  └─ templates       # Templates of the generated reports (notes, README...)
 ├─ kibot_yaml         # KiBot configuration
-├─ KiCanvas           # Interactive schematic viewer (generated)
 ├─ KiRI               # KiRI diff viewer (generated)
 ├─ Logos              # Logos (optional)
 ├─ Manufacturing
@@ -958,5 +955,4 @@ board. Testpoints are the symbols with a `TP` reference.
   [KiCad automation images](https://github.com/INTI-CMNB/kicad_auto).
 - [KiCost](https://github.com/hildogjr/KiCost), [KiRI](https://github.com/leoheck/kiri),
   [pcb2blender](https://github.com/30350n/pcb2blender),
-  [InteractiveHtmlBom](https://github.com/openscopeproject/InteractiveHtmlBom),
-  [KiCanvas](https://github.com/theacodes/kicanvas).
+  [InteractiveHtmlBom](https://github.com/openscopeproject/InteractiveHtmlBom).
