@@ -619,7 +619,11 @@ pictures. The template's *Block Diagram* sheet shows an example.
 1. Save the diagram as `Diagrams/<Sheet name>.drawio`, named after its sheet:
    `Diagrams/Block Diagram.drawio` goes in `Block Diagram.kicad_sch`. A
    `.svg` or `.png` (from another tool) works the same way.
-2. Import it:
+2. Generate as usual (`./run_kibot.sh`, `.\run_kibot.ps1`, or push): before
+   each generation, the diagrams changed since their last import are
+   imported automatically (`auto_diagrams: true` in `kibot_settings.yaml`),
+   locally and in CI. Nothing is done when they are unchanged. To import
+   without generating:
 
    ```
    ./run_kibot.sh --diagrams          # or .\run_kibot.ps1 --diagrams
@@ -632,8 +636,11 @@ pictures. The template's *Block Diagram* sheet shows an example.
    title and fits it to the page; the next ones only replace it, **keeping
    the position and size** you gave it in KiCad. `--diagrams --fit` places it
    again.
-3. Commit the sheet and `Diagrams/imported.json` (hashes of the imported
-   sources). The CI fails when a diagram changed but was not imported.
+3. Commit the updated sheet and `Diagrams/imported.json` (hashes of the
+   imported sources), like any change of the schematic. In CI, a diagram
+   changed without its sheet is imported for the run (the documents are
+   right) with a warning to commit the sheet; with `ci_outputs: commit` the
+   sheet is committed with the outputs.
 
 Close the sheet in KiCad before importing. The picture prints sharp in the
 schematic PDF (~300 dpi on A3); multi-page `.drawio` files: one diagram per
