@@ -46,6 +46,11 @@ docker_image: ghcr.io/inti-cmnb/kicad10_auto_full:1.9.1-1_k10.0.5_d13.2_b4.2.4LT
 # Tags: https://hub.docker.com/r/rlespinasse/drawio-export/tags
 drawio_image: rlespinasse/drawio-export:v4.60.0
 
+# Import the diagrams (Diagrams/<Sheet name>.drawio|svg|png) changed since
+# their last import before each generation, locally and in CI (true | false).
+# The updated sheets are kept: commit them. false: only with --diagrams.
+auto_diagrams: true
+
 # CI only: where the generated outputs go (they are always available as
 # workflow artifacts too):
 #   branch : snapshot (project + outputs) force-pushed to the branch

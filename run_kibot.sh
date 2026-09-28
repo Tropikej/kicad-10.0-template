@@ -12,7 +12,8 @@
 #                                              commit of their branch
 #   ./run_kibot.sh --check-libs                Fail if a library is missing (used by the CI)
 #   ./run_kibot.sh --diagrams [--fit]          Export Diagrams/*.drawio and import them in
-#                                              the schematic sheets
+#                                              the schematic sheets (automatic before a
+#                                              generation when they changed, auto_diagrams)
 #
 # The image is read from kibot_settings.yaml (docker_image), it can be
 # overridden with the KIBOT_IMAGE environment variable.
@@ -122,31 +123,85 @@ esac
 # the docker daemon can be given in KIBOT_PROJECT_HOST_DIR
 project_dir="${KIBOT_PROJECT_HOST_DIR:-$project_dir}"
 
-# Diagrams: export Diagrams/*.drawio to PNG with the draw.io exporter image
-# (headless draw.io), then kibot_launch.sh --diagrams imports them in the
-# sheets. The exporter sometimes hangs at start: time limit and retries.
-if [[ "$1" == --diagrams ]]; then
+# Diagrams (Diagrams/<Sheet name>.drawio|svg|png, see kibot_launch.sh --help):
+# the .drawio are exported to PNG with the draw.io exporter image (headless
+# draw.io), then kibot_launch.sh --diagrams imports them in the sheets.
+boards_list() {
+    local boards
+    boards="$(sed -n 's/^boards:[[:space:]]*\([^#]*\).*/\1/p' "$settings_file" | head -n1 | tr ',' ' ')"
+    echo "${boards:-.}"
+}
+
+# Hash of a diagram source, as import_diagrams.py computes it (LF line endings
+# for the text sources)
+diagram_hash() {
+    local sum=(sha256sum)
+    command -v sha256sum >/dev/null || sum=(shasum -a 256)
+    case "$1" in
+        *.drawio|*.DRAWIO|*.svg|*.SVG) tr -d '\r' < "$1" | "${sum[@]}" | cut -d' ' -f1 ;;
+        *) "${sum[@]}" < "$1" | cut -d' ' -f1 ;;
+    esac
+}
+
+# True if a diagram of the board changed since its last import (imported.json)
+diagrams_stale() {
+    local f name recorded lock="$1/Diagrams/imported.json"
+    for f in "$1"/Diagrams/*.drawio "$1"/Diagrams/*.svg "$1"/Diagrams/*.png; do
+        [[ -f "$f" ]] || continue
+        name="$(basename "$f")"
+        recorded="$(grep -A1 -F "\"$name\": {" "$lock" 2>/dev/null | sed -n 's/.*"sha256": "\([0-9a-f]*\)".*/\1/p')"
+        [[ "$recorded" == "$(diagram_hash "$f")" ]] || return 0
+    done
+    return 1
+}
+
+# Export the .drawio of a board. The exporter sometimes hangs at start: time
+# limit and retries.
+export_diagrams() {
+    local drawio_image try
+    [[ -n "$(ls "$1"/Diagrams/*.drawio 2>/dev/null)" ]] || return 0
     drawio_image="$(get_setting drawio_image)"
     drawio_image="${drawio_image:-rlespinasse/drawio-export:v4.60.0}"
-    boards="$(sed -n 's/^boards:[[:space:]]*\([^#]*\).*/\1/p' "$settings_file" | head -n1 | tr ',' ' ')"
-    for b in ${boards:-.}; do
-        [[ -n "$(ls "$b"/Diagrams/*.drawio 2>/dev/null)" ]] || continue
-        rm -rf "$b/Diagrams/export"
-        ok=false
-        for try in 1 2 3; do
-            if docker run --rm --volume "$project_dir:/data" --workdir /data \
-                    --env DRAWIO_DESKTOP_COMMAND_TIMEOUT=60s "$drawio_image" \
-                    -f png --scale 3 --border 20 --transparent --remove-page-suffix "$b/Diagrams"; then
-                ok=true
-                break
-            fi
-            echo "draw.io export failed or timed out (try $try/3)" >&2
-        done
-        if [[ "$ok" != true ]]; then
-            echo "Error: draw.io export of $b/Diagrams failed" >&2
-            exit 1
+    rm -rf "$1/Diagrams/export"
+    for try in 1 2 3; do
+        if docker run --rm --volume "$project_dir:/data" --workdir /data \
+                --env DRAWIO_DESKTOP_COMMAND_TIMEOUT=60s "$drawio_image" \
+                -f png --scale 3 --border 20 --transparent --remove-page-suffix "$1/Diagrams"; then
+            return 0
         fi
+        echo "draw.io export failed or timed out (try $try/3)" >&2
     done
+    echo "Error: draw.io export of $1/Diagrams failed" >&2
+    return 1
+}
+
+# ./run_kibot.sh --diagrams: export all, then the import below (kibot_launch.sh)
+if [[ "$1" == --diagrams ]]; then
+    for b in $(boards_list); do
+        export_diagrams "$b" || exit 1
+    done
+fi
+
+# Before a generation (auto_diagrams: true): export and import the diagrams
+# changed since their last import, so the documents are up to date. The
+# updated sheets are kept (commit them).
+auto_diagrams=()
+if [[ "$(get_setting auto_diagrams)" != false ]]; then
+    generation=true
+    for a in "$@"; do
+        case "$a" in
+            --shell|--serve|--diagrams|--stackup|--init|--costs|-h|--help|--server|--stop-server) generation=false ;;
+        esac
+    done
+    if [[ "$generation" == true ]]; then
+        for b in $(boards_list); do
+            if diagrams_stale "$b"; then
+                echo "Diagrams of $b changed since their last import: importing them (auto_diagrams)"
+                export_diagrams "$b" || exit 1
+                auto_diagrams+=("$b")
+            fi
+        done
+    fi
 fi
 
 image="${KIBOT_IMAGE:-$(get_setting docker_image)}"
@@ -194,6 +249,9 @@ case "$1" in
         exec docker "${docker_args[@]}" -p "$port:$port" --entrypoint python3 "$image" -m http.server "$port"
         ;;
     *)
+        if [[ ${#auto_diagrams[@]} -gt 0 ]]; then
+            docker "${docker_args[@]}" --entrypoint /bin/bash "$image" ./kibot_launch.sh --diagrams || exit 1
+        fi
         exec docker "${docker_args[@]}" --entrypoint /bin/bash "$image" ./kibot_launch.sh "$@"
         ;;
 esac

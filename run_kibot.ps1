@@ -14,7 +14,8 @@
   .\run_kibot.ps1 --update-libs               Update the libraries to the latest
                                               commit of their branch
   .\run_kibot.ps1 --diagrams [--fit]          Export Diagrams/*.drawio and import them in
-                                              the schematic sheets
+                                              the schematic sheets (automatic before a
+                                              generation when they changed, auto_diagrams)
 
   The image is read from kibot_settings.yaml (docker_image), it can be
   overridden with the KIBOT_IMAGE environment variable.
@@ -107,30 +108,83 @@ switch ($args[0]) {
 
 $projectDir = $PSScriptRoot
 
-# Diagrams: export Diagrams/*.drawio to PNG with the draw.io exporter image
-# (headless draw.io), then kibot_launch.sh --diagrams imports them in the
-# sheets. The exporter sometimes hangs at start: time limit and retries.
-if ($args[0] -eq '--diagrams') {
+# Diagrams (Diagrams/<Sheet name>.drawio|svg|png, see kibot_launch.sh --help):
+# the .drawio are exported to PNG with the draw.io exporter image (headless
+# draw.io), then kibot_launch.sh --diagrams imports them in the sheets.
+function Get-Boards {
+    $line = Select-String -Path $settingsFile -Pattern '^boards:\s*([^#]*)' | Select-Object -First 1
+    $boards = @()
+    if ($line) { $boards = @($line.Matches[0].Groups[1].Value -split '[\s,]+' | Where-Object { $_ }) }
+    if (-not $boards) { $boards = @('.') }
+    return $boards
+}
+
+# Hash of a diagram source, as import_diagrams.py computes it (LF line endings
+# for the text sources)
+function Get-DiagramHash([string]$Path) {
+    if ($Path -match '\.(drawio|svg)$') {
+        $text = [IO.File]::ReadAllText((Resolve-Path $Path)) -replace "`r`n", "`n"
+        $bytes = (New-Object Text.UTF8Encoding $false).GetBytes($text)
+    } else {
+        $bytes = [IO.File]::ReadAllBytes((Resolve-Path $Path))
+    }
+    $sha = [Security.Cryptography.SHA256]::Create()
+    return (($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') }) -join '')
+}
+
+# True if a diagram of the board changed since its last import (imported.json)
+function Test-DiagramsStale([string]$Board) {
+    $dir = Join-Path $Board 'Diagrams'
+    $lockFile = Join-Path $dir 'imported.json'
+    $lock = $null
+    if (Test-Path $lockFile) { $lock = Get-Content $lockFile -Raw | ConvertFrom-Json }
+    foreach ($f in Get-ChildItem -Path $dir -File -ErrorAction SilentlyContinue |
+             Where-Object { $_.Extension -match '^\.(drawio|svg|png)$' }) {
+        $recorded = if ($lock -and $lock.($f.Name)) { $lock.($f.Name).sha256 } else { '' }
+        if ($recorded -ne (Get-DiagramHash $f.FullName)) { return $true }
+    }
+    return $false
+}
+
+# Export the .drawio of a board. The exporter sometimes hangs at start: time
+# limit and retries.
+function Export-Diagrams([string]$Board) {
+    if (-not (Get-ChildItem -Path (Join-Path $Board 'Diagrams') -Filter '*.drawio' -ErrorAction SilentlyContinue)) { return }
     $drawioImage = Get-Setting 'drawio_image'
     if (-not $drawioImage) { $drawioImage = 'rlespinasse/drawio-export:v4.60.0' }
-    $boardsLine = Select-String -Path $settingsFile -Pattern '^boards:\s*([^#]*)' | Select-Object -First 1
-    $boards = @()
-    if ($boardsLine) { $boards = @($boardsLine.Matches[0].Groups[1].Value -split '[\s,]+' | Where-Object { $_ }) }
-    if (-not $boards) { $boards = @('.') }
-    foreach ($b in $boards) {
-        if (-not (Get-ChildItem -Path (Join-Path $b 'Diagrams') -Filter '*.drawio' -ErrorAction SilentlyContinue)) { continue }
-        Remove-Item -Recurse -Force (Join-Path $b 'Diagrams/export') -ErrorAction SilentlyContinue
-        $ok = $false
-        foreach ($try in 1..3) {
-            & docker run --rm --volume "${projectDir}:/data" --workdir /data `
-                --env DRAWIO_DESKTOP_COMMAND_TIMEOUT=60s $drawioImage `
-                -f png --scale 3 --border 20 --transparent --remove-page-suffix "$b/Diagrams"
-            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
-            Write-Warning "draw.io export failed or timed out (try $try/3)"
+    Remove-Item -Recurse -Force (Join-Path $Board 'Diagrams/export') -ErrorAction SilentlyContinue
+    foreach ($try in 1..3) {
+        & docker run --rm --volume "${projectDir}:/data" --workdir /data `
+            --env DRAWIO_DESKTOP_COMMAND_TIMEOUT=60s $drawioImage `
+            -f png --scale 3 --border 20 --transparent --remove-page-suffix "$Board/Diagrams"
+        if ($LASTEXITCODE -eq 0) { return }
+        Write-Warning "draw.io export failed or timed out (try $try/3)"
+    }
+    throw "draw.io export of $Board/Diagrams failed"
+}
+
+# .\run_kibot.ps1 --diagrams: export all, then the import below (kibot_launch.sh)
+if ($args[0] -eq '--diagrams') {
+    foreach ($b in Get-Boards) { Export-Diagrams $b }
+}
+
+# Before a generation (auto_diagrams: true): export and import the diagrams
+# changed since their last import, so the documents are up to date. The
+# updated sheets are kept (commit them).
+$autoDiagrams = $false
+if ((Get-Setting 'auto_diagrams') -ne 'false') {
+    $skip = '--shell', '--serve', '--diagrams', '--stackup', '--init', '--costs', '-h', '--help', '--server', '--stop-server'
+    if (-not ($args | Where-Object { $skip -contains $_ })) {
+        foreach ($b in Get-Boards) {
+            if (Test-DiagramsStale $b) {
+                Write-Host "Diagrams of $b changed since their last import: importing them (auto_diagrams)"
+                Export-Diagrams $b
+                $autoDiagrams = $true
+            }
         }
-        if (-not $ok) { throw "draw.io export of $b/Diagrams failed" }
     }
 }
+
 # Nested docker (act, dev containers...): path of the project seen by the daemon
 if ($env:KIBOT_PROJECT_HOST_DIR) { $projectDir = $env:KIBOT_PROJECT_HOST_DIR }
 # Cache for the 3D models downloaded by KiBot: docker volume or host directory
@@ -168,6 +222,10 @@ switch ($args[0]) {
         & docker @dockerArgs -p "${port}:${port}" --entrypoint python3 $image -m http.server $port
     }
     default {
+        if ($autoDiagrams) {
+            & docker @dockerArgs --entrypoint /bin/bash $image ./kibot_launch.sh --diagrams
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
         & docker @dockerArgs --entrypoint /bin/bash $image ./kibot_launch.sh @args
     }
 }

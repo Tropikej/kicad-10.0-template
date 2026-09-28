@@ -88,16 +88,17 @@ jobs:
       - name: Check the configuration reference
         run: python3 kibot_resources/scripts/gen_config_reference.py --check
 
-      # A diagram (Diagrams/*.drawio...) changed but was not imported in its
-      # sheet: run ./run_kibot.sh --diagrams and commit the sheet
+      # A diagram (Diagrams/*.drawio...) changed but its sheet was not updated
+      # in the commit: run_kibot.sh imports it before the generation
+      # (auto_diagrams), so the documents are right. Warn to commit the sheet.
       - name: Check the diagrams
         run: |
           boards="$(sed -n 's/^boards:[[:space:]]*\([^#]*\).*/\1/p' kibot_settings.yaml | head -n1 | tr ',' ' ')"
-          failed=0
           for b in ${boards:-.}; do
-            python3 kibot_resources/scripts/import_diagrams.py --check --project "$b" || failed=1
+            if ! python3 kibot_resources/scripts/import_diagrams.py --check --project "$b"; then
+              echo "::warning::Diagrams of $b changed but their sheet is not updated in this commit: imported for this run. Run ./run_kibot.sh --diagrams locally and commit the sheet."
+            fi
           done
-          exit $failed
 
       - name: Read settings
         id: settings
