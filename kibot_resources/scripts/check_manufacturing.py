@@ -550,7 +550,10 @@ def check_pdfs(rep):
             bad_pages = [str(i + 1) for i, p in enumerate(pages) if '${' in p]
             rep.error('{}: unexpanded variables {} (page {})'.format(name, ', '.join(unexpanded[:5]),
                                                                     ', '.join(bad_pages[:5])))
-        found = [p for p in placeholders if p in text]
+        # The title block also carries static "Board Name:"/"Project Name:"
+        # labels: only a placeholder used as a value (not immediately followed
+        # by a ':') is an unfilled field.
+        found = [p for p in placeholders if re.search(re.escape(p) + r'(?!\s*:)', text)]
         if found:
             rep.warn('{}: template placeholders still there: {}'.format(name, ', '.join(found)))
         if revision and revision not in text:
