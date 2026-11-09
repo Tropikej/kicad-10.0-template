@@ -200,6 +200,11 @@ Files of `kibot_resources/stackups`, applied with `./run_kibot.sh --stackup NAME
 | `impedance` | Rows of the impedance table of the fabrication document (`line, impedance, tolerance, layer, width, gap, gnd_gap, ref`), `[]` for *No controlled impedance* |
 | `netclasses` | Net classes created or updated (`name, track_width, clearance, diff_pair_width, diff_pair_gap, diff_pair_via_gap, via_diameter, via_drill`), `Default` included |
 | `netclass_minimums` | The other net classes are raised to these values (never lowered) |
+| `min_paper` | Enlarge the drawing sheet to at least this A-series size (e.g. `A3`) if it is smaller; a `..._A<n>.kicad_wks` PCB worksheet is switched to the matching size. Never shrinks |
+| `user_layers` | User layers enabled on the board, `{User.N: name}` (a layer already used is not renamed) |
+| `footprint_libraries` | Footprint libraries added to the project `fp-lib-table`, `{nickname: path from the repository root}` (written with a `${KIPRJMOD}` relative path) |
+| `fixture_footprint` | CNC fixture footprint (`nickname:name` of a `footprint_libraries` entry) placed locked, centred on the board outline, unless the board already has one |
+| `manufacturing_files` | Folder of kibot_resources/stackups whose files are copied to `<project>/manufacturing` (an existing file is never overwritten) |
 
 ## kibot_launch.sh / run_kibot.sh options
 

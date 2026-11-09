@@ -8,12 +8,12 @@
 # - https://github.com/brunostjohn/CarveraPCBGuide
 # - Makera Z1: 13000 rpm spindle, 0.02 mm motion resolution
 #
-# Isolation width = tip + 2 x depth x tan(angle / 2): a 0.1 mm 30 deg V-bit cuts
-# 0.13 mm at 0.05 mm depth and 0.18 mm at 0.15 mm (needed to clear the copper
-# of an uneven board), a 60 deg V-bit 0.27 mm at 0.15 mm. The Board Setup
-# minimums below are the process limits (0.2 mm isolation needs the 0.1 mm
-# 30 deg V-bit and mesh auto-leveling), the net classes keep a margin
-# (Z1 users report traces losing width with 60 deg V-bits).
+# Isolation width = tip + 2 x depth x tan(angle / 2). With the 20 deg Dreanique
+# V-bits at 0.08 mm depth (mesh auto-leveling), validated on 0.5 mm pitch pads:
+# 0.2 mm tip -> 0.228 mm, 0.1 mm tip -> 0.128 mm. The Board Setup minimums
+# below are the limits of the 0.2 mm bit (0.228 + 0.02 margin = 0.25 mm); the
+# 0.1 mm bit allows 0.15 mm, but it is fragile. The net classes keep a margin.
+# pcbcam checks the board again with the tools of manufacturing/tools.yaml.
 
 name: Makera Z1 FR4 1.5 mm
 description: CNC milled 2 layers 1.5 mm, 1 oz, unplated
@@ -28,7 +28,7 @@ layers:
 
 design_rules: makera_z1_2layer.kicad_dru
 fabrication_notes: fabrication_notes_makera_z1.txt
-board_rules: {min_track_width: 0.25, min_clearance: 0.2, min_via_diameter: 1.2, min_through_hole_diameter: 0.6,
+board_rules: {min_track_width: 0.25, min_clearance: 0.25, min_via_diameter: 1.2, min_through_hole_diameter: 0.6,
               min_via_annular_width: 0.3, min_hole_to_hole: 0.5, min_hole_clearance: 0.3,
               min_copper_edge_clearance: 0.5, min_text_height: 1.5, min_text_thickness: 0.2,
               solder_mask_min_width: 0.0}
@@ -55,8 +55,8 @@ netclasses:
   - {name: Default, track_width: 0.4, clearance: 0.3, via_diameter: 1.6, via_drill: 0.8, diff_pair_width: 0.4,
      diff_pair_gap: 0.3, diff_pair_via_gap: 0.3}
   - {name: POWER, track_width: 1.0, clearance: 0.4, via_diameter: 2.0, via_drill: 1.0}
-  # Fine pitch escapes only (0.1 mm 30 deg V-bit, leveled board)
-  - {name: CNC_FINE, track_width: 0.25, clearance: 0.2, via_diameter: 1.2, via_drill: 0.6}
+  # Fine pitch escapes only (0.5 mm pitch: 0.25 mm pads and gaps, leveled board)
+  - {name: CNC_FINE, track_width: 0.25, clearance: 0.25, via_diameter: 1.2, via_drill: 0.6}
   # Approximate impedance (table above): the net class clearance is the gap to
   # the ground pour, keep the zone clearance at or below 0.3 mm
   - {name: 50R, track_width: 1.48, clearance: 0.3, via_diameter: 1.6, via_drill: 0.8, diff_pair_width: 0.4, diff_pair_gap: 0.3}
@@ -66,3 +66,20 @@ netclasses:
      via_diameter: 1.6, via_drill: 0.8}
 netclass_minimums: {track_width: 0.4, clearance: 0.3, via_diameter: 1.6, via_drill: 0.8, diff_pair_width: 0.4,
                     diff_pair_gap: 0.3}
+
+# CNC milling with pcbcam (KiCad -> pcb2gcode -> Makera Z1 G-code):
+# - layer User.10 "Fixture" and the pcbcam-fixtures footprint library
+# - the fixture footprint FIXTURE placed (locked) with the stock centred on the
+#   board: the 100 x 160 mm blank and its registration pins. Its origin, the
+#   stock lower-left corner, is work zero: draw the board inside it.
+# - manufacturing/recipe.yaml, tools.yaml, fixture.yaml (never overwritten)
+# - the drawing sheet enlarged to at least A3 (the 100 x 160 stock crowds A4), and the
+#   PCB worksheet switched from its ..._A4.kicad_wks to the matching ..._A3.kicad_wks
+min_paper: A3
+# User.10 = fixture stock/pins. User.11/User.12 hold label text to engrave with
+# a V-bit (pcbcam engrave step): draw it in the default stroke font (tick the
+# text "Mirrored" box for User.12 back labels).
+user_layers: {User.11: Engrave Front, User.12: Engrave Back, User.10: Fixture}
+footprint_libraries: {pcbcam-fixtures: kibot_resources/footprints/pcbcam-fixtures.pretty}
+fixture_footprint: pcbcam-fixtures:Stock_100x160_Pins4mm
+manufacturing_files: makera_z1_pcbcam

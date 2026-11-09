@@ -556,9 +556,11 @@ fi
 rm -f kibot_????????.kicad_{pcb,pro,prl,dru,sch} ./*.kicad_pcb-bak ./*.kicad_pro-bak ./~*.lck
 rm -f "$project_dir"/kibot_????????.kicad_{pcb,pro,prl,dru,sch} "$project_dir"/*.kicad_pcb-bak "$project_dir"/*.kicad_pro-bak
 
-# Give the generated files back to the host user (Linux hosts, see run_kibot.sh)
+# Give the generated files back to the host user (Linux hosts, see run_kibot.sh),
+# and the 3D models cache too: in CI it is a host directory (KIBOT_3D_CACHE_DIR)
+# that the runner must be able to save and delete
 if [[ -n "$HOST_UID" && -n "$HOST_GID" && "$(id -u)" == "0" ]]; then
-    chown -R "$HOST_UID:$HOST_GID" . 2>/dev/null
+    chown -R "$HOST_UID:$HOST_GID" . "$KIBOT_3D_MODELS" 2>/dev/null
 fi
 
 exit $failed

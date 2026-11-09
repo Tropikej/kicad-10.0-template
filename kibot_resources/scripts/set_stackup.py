@@ -9,6 +9,9 @@ project:
   Setup minimums, via sizes, design rules file (.kicad_dru) and fabrication
   notes (both only if not customized)
 - impedance table of the fabrication document
+- CNC milling: user layers, project footprint libraries, manufacturing
+  configuration files (never overwritten) and a fixture footprint (stock and
+  registration pins) placed around the board
 
 The KiCad Python API doesn't expose the stackup, so the .kicad_pcb file is
 edited as text. Close the project in KiCad before running it.
@@ -45,11 +48,23 @@ def install_file(dst, profiles_dir, name, pattern, label):
     return None
 
 
-def update_project(pro_file, profile, profiles_dir, fab_notes=None):
-    """ Net classes, Board Setup rules and via sizes of the .kicad_pro """
+def update_project(pro_file, profile, profiles_dir, fab_notes=None, paper_target=None):
+    """ Net classes, Board Setup rules and via sizes of the .kicad_pro.
+        paper_target='A3': if the PCB worksheet is named `..._A<n>.kicad_wks`, switch it to the matching
+        `..._<paper_target>.kicad_wks` (when that file exists) so the title block fits the sheet. """
     with open(pro_file, encoding='utf-8') as f:
         pro = json.load(f)
     msgs = []
+    if paper_target:
+        wks = pro.get('pcbnew', {}).get('page_layout_descr_file')
+        new_wks = re.sub(r'_A[0-5](\.kicad_wks)$', '_' + paper_target + r'\1', wks) if wks else None
+        if new_wks and new_wks != wks:
+            if os.path.isfile(os.path.join(os.path.dirname(pro_file), new_wks)):
+                pro['pcbnew']['page_layout_descr_file'] = new_wks
+                msgs.append('PCB worksheet {} -> {}'.format(os.path.basename(wks), os.path.basename(new_wks)))
+            else:
+                msgs.append('WARNING: sheet is {} but worksheet {} not found, kept {}'.format(
+                    paper_target, os.path.basename(new_wks), os.path.basename(wks)))
     classes = pro.setdefault('net_settings', {}).setdefault('classes', [])
     default = next((c for c in classes if c.get('name') == 'Default'), None)
     for nc in profile.get('netclasses', []):
@@ -129,6 +144,115 @@ def refill_zones(board, pro_file):
             with open(pro_file, 'wb') as f:
                 f.write(pro_text)
     return '{} zone(s) refilled'.format(len(zones))
+
+
+def user_layer_id(name):
+    """ KiCad 10 layer IDs: User.1=39, User.2=41... """
+    return 37 + 2 * int(name[len('User.'):])
+
+
+def add_user_layers(text, layers_pos, user_layers):
+    """ Enables the profile user layers (`User.N: name`) in the layers block, returns (text, messages).
+        A layer already enabled keeps its name, unless it is unnamed. """
+    block = text[layers_pos[0]:layers_pos[1]]
+    lines = block.split('\n')
+    msgs = []
+    for layer, name in user_layers.items():
+        if not re.match(r'^User\.\d+$', layer):
+            raise ValueError('user_layers: {} is not a User.N layer'.format(layer))
+        idx = next((i for i, ln in enumerate(lines) if '"{}"'.format(layer) in ln), None)
+        if idx is None:
+            lines.insert(len(lines) - 1, '\t\t({} "{}" user "{}")'.format(user_layer_id(layer), layer, name))
+            msgs.append('layer {} "{}" added'.format(layer, name))
+        elif re.search(r'"{}" user\)'.format(re.escape(layer)), lines[idx]):
+            lines[idx] = lines[idx].replace('user)', 'user "{}")'.format(name))
+            msgs.append('layer {} named "{}"'.format(layer, name))
+        elif '"{}"'.format(name) not in lines[idx]:
+            msgs.append('WARNING: layer {} is already used as {}, not renamed to "{}"'.format(
+                layer, re.findall(r'"([^"]+)"', lines[idx])[-1], name))
+    new_block = '\n'.join(lines)
+    return text[:layers_pos[0]] + new_block + text[layers_pos[1]:], msgs
+
+
+def add_footprint_libraries(project_dir, libraries):
+    """ Adds the profile footprint libraries (`nickname: path from the repository root`) to the project
+        fp-lib-table, with a ${KIPRJMOD} relative path (works for every board of a multi-board repository) """
+    table = os.path.join(project_dir, 'fp-lib-table')
+    text = '(fp_lib_table\n\t(version 7)\n)\n'
+    if os.path.isfile(table):
+        with open(table, encoding='utf-8') as f:
+            text = f.read()
+    msgs = []
+    for nick, path in libraries.items():
+        if re.search(r'\(name "{}"\)'.format(re.escape(nick)), text):
+            continue
+        rel = os.path.relpath(os.path.abspath(path), os.path.abspath(project_dir)).replace(os.sep, '/')
+        entry = '\t(lib (name "{}")(type "KiCad")(uri "${{KIPRJMOD}}/{}")(options "")(descr ""))\n'.format(nick, rel)
+        end = text.rstrip().rfind(')')
+        text = text[:end] + entry + text[end:]
+        msgs.append('footprint library {} ({})'.format(nick, rel))
+    if msgs:
+        with open(table, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(text)
+    return ['{}: {}'.format(table, m) for m in msgs]
+
+
+def install_manufacturing_files(src_dir, project_dir):
+    """ Copies the profile manufacturing files to <project>/manufacturing, never overwriting a project file """
+    dst_dir = os.path.join(project_dir, 'manufacturing')
+    msgs = []
+    for name in sorted(os.listdir(src_dir)):
+        src, dst = os.path.join(src_dir, name), os.path.join(dst_dir, name)
+        if os.path.isfile(src) and not os.path.exists(dst):
+            os.makedirs(dst_dir, exist_ok=True)
+            shutil.copyfile(src, dst)
+            msgs.append('{} installed'.format(dst))
+    return msgs
+
+
+def place_fixture(board, pro_file, lib_path, lib_id):
+    """ Places the fixture footprint (stock outline + registration pins, origin = stock lower-left corner)
+        locked, with the stock centred on the board outline. Kept if the board already has one. """
+    try:
+        import pcbnew
+    except ImportError:
+        return 'KiCad Python API not available, place {} by hand'.format(lib_id)
+    nick, name = lib_id.split(':', 1)
+    pro_text = None
+    if os.path.isfile(pro_file):
+        with open(pro_file, 'rb') as f:
+            pro_text = f.read()
+    try:
+        pcb = pcbnew.LoadBoard(board)
+        for fp in pcb.GetFootprints():
+            if fp.HasField('pcbcam_fixture'):
+                return 'fixture footprint {} kept ({})'.format(fp.GetReference(), fp.GetFPIDAsString())
+        fp = pcbnew.FootprintLoad(lib_path, name)
+        if fp is None:
+            return 'WARNING: footprint {} not found in {}'.format(name, lib_path)
+        fp.SetFPID(pcbnew.LIB_ID(nick, name))
+        # Stock size from the footprint graphics: the widest rectangle
+        rects = [s for s in fp.GraphicalItems() if s.GetClass() == 'PCB_SHAPE' and s.GetShape() == pcbnew.SHAPE_T_RECT]
+        w, h = max(((abs(s.GetEnd().x - s.GetStart().x), abs(s.GetEnd().y - s.GetStart().y)) for s in rects),
+                   key=lambda wh: wh[0] * wh[1])
+        edges = pcb.GetBoardEdgesBoundingBox()
+        if edges.GetWidth() > 0 and edges.GetHeight() > 0:
+            cx, cy = edges.GetCenter().x, edges.GetCenter().y
+        else:
+            cx, cy = pcb.GetDesignSettings().GetAuxOrigin().x, pcb.GetDesignSettings().GetAuxOrigin().y
+        grid = pcbnew.FromMM(0.5)
+        # Origin = stock lower-left corner, the stock extends up (-Y) and right
+        x = round((cx - w / 2) / grid) * grid
+        y = round((cy + h / 2) / grid) * grid
+        fp.SetPosition(pcbnew.VECTOR2I(int(x), int(y)))
+        fp.SetLocked(True)
+        pcb.Add(fp)
+        pcb.Save(board)
+    finally:
+        if pro_text is not None:
+            with open(pro_file, 'wb') as f:
+                f.write(pro_text)
+    return 'fixture footprint {} placed, locked, stock centred on the board'.format(lib_id)
 
 
 def copper_names(n):
@@ -225,6 +349,24 @@ def list_profiles(directory):
                                                            p.get('description', '')))
 
 
+PAPER_RANK = {'A5': 0, 'A4': 1, 'A3': 2, 'A2': 3, 'A1': 4, 'A0': 5}
+
+
+def ensure_paper(text, target):
+    """ Enlarge the drawing sheet to `target` (an A-series size) if it is currently smaller.
+        Never shrinks, and leaves custom/unknown sizes (e.g. `(paper "User" w h)`) alone.
+        Returns (new_text, message, old_size); old_size is None when nothing changed. """
+    if target not in PAPER_RANK:
+        return text, None, None
+    m = re.search(r'\(paper "([^"]+)"', text)
+    if not m:
+        return text, None, None
+    cur = m.group(1)
+    if cur not in PAPER_RANK or PAPER_RANK[cur] >= PAPER_RANK[target]:
+        return text, None, None
+    return text[:m.start(1)] + target + text[m.end(1):], 'drawing sheet {} -> {}'.format(cur, target), cur
+
+
 def main():
     parser = argparse.ArgumentParser(description='Apply a stackup profile to a KiCad 10 PCB')
     parser.add_argument('profile', nargs='?', help='Stackup profile (YAML file or name in the stackups dir)')
@@ -289,16 +431,31 @@ def main():
     # Replace from the end to keep the positions valid
     text = text[:stackup_pos[0]] + new_stackup + text[stackup_pos[1]:]
     text = text[:layers_pos[0]] + new_layers + text[layers_pos[1]:]
+    layer_msgs = []
+    if profile.get('user_layers'):
+        text, layer_msgs = add_user_layers(text, find_block(text, 'layers', '	'), profile['user_layers'])
 
     thickness = sum(float(la['thickness']) for la in profile['layers'])
     if profile.get('solder_mask', True):
         thickness += 2 * float(profile.get('mask_thickness', 0.01))
     text = re.sub(r'(\n\t\(general\n\t\t\(thickness )[\d.]+\)', r'\g<1>{})'.format(fmt(round(thickness, 4))), text, count=1)
 
+    # Drawing sheet: enlarge to at least `min_paper` (the fixture stock needs the room)
+    paper_target = None
+    paper_msg = None
+    if profile.get('min_paper'):
+        text, paper_msg, _ = ensure_paper(text, profile['min_paper'])
+        m = re.search(r'\(paper "([^"]+)"', text)
+        paper_target = m.group(1) if m else None
+
     with open(board, 'w', encoding='utf-8', newline='\n') as f:
         f.write(text)
     print('{}: applied {} ({}, {} copper layers, {} mm)'.format(board, profile.get('name', profile_file),
                                                                profile.get('description', ''), n, fmt(round(thickness, 3))))
+    if paper_msg:
+        print('{}: {}'.format(board, paper_msg))
+    for msg in layer_msgs:
+        print('{}: {}'.format(board, msg))
 
     # Impedance table of the fabrication document
     rows = profile.get('impedance')
@@ -317,8 +474,27 @@ def main():
     # Project: net classes, Board Setup rules, via sizes, design rules
     pro_file = board[:-len('.kicad_pcb')] + '.kicad_pro'
     if os.path.isfile(pro_file):
-        for msg in update_project(pro_file, profile, os.path.dirname(os.path.abspath(profile_file)), args.fab_notes):
+        for msg in update_project(pro_file, profile, os.path.dirname(os.path.abspath(profile_file)), args.fab_notes,
+                                  paper_target):
             print('{}: {}'.format(pro_file, msg))
+
+    # CNC milling (pcbcam): footprint libraries, manufacturing configuration, fixture footprint
+    project_dir = os.path.dirname(os.path.abspath(board))
+    profiles_dir = os.path.dirname(os.path.abspath(profile_file))
+    libraries = profile.get('footprint_libraries', {})
+    for msg in add_footprint_libraries(project_dir, libraries):
+        print(msg)
+    if profile.get('manufacturing_files'):
+        for msg in install_manufacturing_files(os.path.join(profiles_dir, profile['manufacturing_files']), project_dir):
+            print(msg)
+    if profile.get('fixture_footprint'):
+        nick = profile['fixture_footprint'].split(':', 1)[0]
+        if nick not in libraries:
+            print('Error: fixture_footprint {} is not in a footprint_libraries entry'.format(profile['fixture_footprint']),
+                  file=sys.stderr)
+            return 1
+        print('{}: {}'.format(board, place_fixture(board, pro_file, os.path.abspath(libraries[nick]),
+                                                   profile['fixture_footprint'])))
 
     # After the project update, so the fills use the new clearances
     if not args.no_fill:

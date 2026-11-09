@@ -8,11 +8,16 @@
 
 # ----------------------------------- Isolation -------------------------------------------------------
 
-# The isolation groove is the limit: 0.2 mm needs a 0.1 mm 30 deg V-bit, a flat
-# board and mesh auto-leveling. It applies to all copper (pads of fine pitch
-# footprints included), not only tracks.
+# The isolation groove is the limit: the 0.2 mm 20 deg V-bit cuts 0.228 mm at
+# 0.08 mm depth (flat board, mesh auto-leveling), so the hard minimum is
+# ~0.248 mm (+ 0.02 mm margin). Set to 0.3 mm to match the profile's net
+# classes: a custom .kicad_dru clearance rule OUTRANKS the net-class value and
+# the zone's own clearance, so a lower floor here silently shadows them (the
+# pour cannot fill back further than this, whatever the zone clearance is set
+# to). Keeping it at the 0.3 mm working value avoids that trap. It applies to
+# all copper (pads of fine pitch footprints included), not only tracks.
 (rule "Isolation clearance"
-	(constraint clearance (min 0.2mm)))
+	(constraint clearance (min 0.3mm)))
 
 # Thinner tracks are eaten by the V-bit (the groove widens with the cut depth)
 (rule "Track width"
