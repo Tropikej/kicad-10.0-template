@@ -292,6 +292,8 @@ manufacturer by copying one of the YAML files. Profile entries:
 | `impedance` | Rows of the impedance table, `[]` for *No controlled impedance* |
 | `netclasses` | Net classes created or updated (`Default` included) |
 | `netclass_minimums` | The other net classes are raised to these values (never lowered) |
+| `user_layers`, `footprint_libraries` | User layers enabled on the board, footprint libraries added to the project |
+| `fixture_footprint`, `manufacturing_files` | CNC fixture footprint placed around the board, files copied to `manufacturing/` |
 
 The impedance values come from the JLCPCB
 [impedance calculator](https://jlcpcb.com/pcb-impedance-calculator), pairs with
@@ -328,7 +330,7 @@ from the Makera community (Discord `#all-things-pcb` and `#z1-general`) and the
 
 | Rule | Board Setup / `.kicad_dru` minimum | Net classes | Why |
 | --- | --- | --- | --- |
-| Isolation (clearance, all copper) | 0.2 mm | `Default` 0.3 mm, `POWER` 0.4 mm | Groove = tip + 2 × depth × tan(angle/2): 0.1 mm 30° V-bit ≈ 0.18 mm at 0.15 mm depth, 60° V-bit ≈ 0.27 mm. 0.2 mm needs the 30° bit and mesh auto-leveling |
+| Isolation (clearance, all copper) | 0.25 mm | `Default` 0.3 mm, `POWER` 0.4 mm, `CNC_FINE` 0.25 mm | Groove = tip + 2 × depth × tan(angle/2): the 0.2 mm 20° V-bit cuts 0.228 mm at 0.08 mm depth (mesh auto-leveling) + 0.02 mm margin, enough for 0.5 mm pitch pads. The 0.1 mm 20° bit allows 0.15 mm but is fragile |
 | Track width | 0.25 mm | `Default` 0.4 mm, `POWER` 1.0 mm, `CNC_FINE` 0.25 mm | The V-bit eats the tracks (Z1 users report 0.25 mm tracks coming out too thin) |
 | Holes | 0.6 mm | | Smallest usual drill bit, holes are **not plated** |
 | Vias | 0.6 mm hole / 1.2 mm, ring 0.3 mm | 0.8 / 1.6 mm (sizes 0.6/1.2, 0.8/1.6, 1.0/2.0) | Rivets or wires, set by hand: flange and flip misalignment |
@@ -340,6 +342,24 @@ from the Makera community (Discord `#all-things-pcb` and `#z1-general`) and the
 
 The profile also:
 
+- **Prepares the board for pcbcam** (KiCad → pcb2gcode → Z1 G-code):
+  - layer `User.10` named `Fixture`, and the `pcbcam-fixtures` footprint library
+    (`kibot_resources/footprints`) in the project `fp-lib-table`;
+  - the **fixture footprint** `FIXTURE` (`Stock_100x160_Pins4mm`), placed locked
+    with the stock centred on the board: the 100 × 160 mm blank, the area the
+    outline may use (dashed), the four 4 mm registration pins with their
+    keep-out circles, the flip axis and work zero. Graphics only: nothing
+    reaches the Gerbers or the drill file. Its origin, the stock lower-left
+    corner, is work zero: pcbcam cuts the board where it is drawn inside it;
+  - `manufacturing/recipe.yaml`, `tools.yaml` and `fixture.yaml`, copied only
+    if missing: they are the project's milling settings, edit and commit them.
+
+  The pin positions are placeholders until the fixture is built
+  (`verified: false` in `fixture.yaml`). When the fixture changes, regenerate the
+  footprint with `pcbcam fixture-footprint` and copy it to
+  `kibot_resources/footprints/pcbcam-fixtures.pretty`, then *Tools → Update
+  Footprints from Library* in the projects. Switching to a JLCPCB profile keeps
+  the layer and the footprint (delete `FIXTURE` if you want).
 - **Raises every other net class** to 0.4 mm tracks / 0.3 mm clearance / 1.6/0.8
   mm vias (`netclass_minimums`), so the router places machinable copper. Values
   are only raised: switching back to a JLCPCB profile keeps them (valid,
