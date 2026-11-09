@@ -52,7 +52,8 @@ concurrency:
 
 env:
   KIBOT_LOGS: kibot_logs
-  KIBOT_3D_CACHE_DIR: ${{ github.workspace }}/../kibot_3d_models
+  # KIBOT_3D_CACHE_DIR is set by the "Configure git" step: on Forgejo, github.workspace is still empty when the
+  # workflow-level env is evaluated
 
 jobs:
   generate_outputs:
@@ -142,12 +143,13 @@ jobs:
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
+          echo "KIBOT_3D_CACHE_DIR=$(dirname "$GITHUB_WORKSPACE")/kibot_3d_models" >> "$GITHUB_ENV"
 
       # Release: rename the [Unreleased] section of CHANGELOG.md to the tag,
       # before the generation so the documents show the right revision history
       - name: Update CHANGELOG
         if: github.ref_type == 'tag'
-        uses: thomaseizinger/keep-a-changelog-new-release@v3
+        uses: thomaseizinger/keep-a-changelog-new-release@3.1.0 # no v3 tag
         with:
           tag: ${{ github.ref_name }}
 
@@ -341,3 +343,51 @@ jobs:
           name: ${{ github.ref_name }}
           body_path: ${{ runner.temp }}/release_notes.md
           files: ${{ runner.temp }}/release/*
+
+  # Makera Z1 machinability gate: `pcbcam check` (KiCad export + machine DRC +
+  # hole-size checks) on every board that carries manufacturing/recipe.yaml. It
+  # needs kicad-cli but NOT the pcb2gcode Docker image, because `check` stops
+  # before CAM -- so it runs in KiCad's own image, independent of the KiBot job.
+  #
+  # DORMANT until you set the PCBCAM_SRC Actions variable (repo or org-level) to
+  # the public pcbcam source, e.g.
+  #     git+https://github.com/<you>/CNC-PCB-milling.git@main
+  # Until then the job is skipped (no red X). On first activation, confirm the
+  # kicad/kicad tag can load your KiCad 10 files (bump it if not), and that the
+  # image has git/curl (the first step installs them if missing).
+  pcbcam_check:
+    name: pcbcam check (Makera Z1)
+    if: vars.PCBCAM_SRC != ''
+    runs-on: ubuntu-latest
+    container:
+      image: kicad/kicad:10.0
+      options: --user root
+    steps:
+      - name: Ensure git & curl
+        run: command -v git >/dev/null && command -v curl >/dev/null || (apt-get update -qq && apt-get install -y -qq git curl)
+      - uses: actions/checkout@v7
+      - name: Detect pcbcam projects
+        id: scan
+        run: |
+          boards="$(sed -n 's/^boards:[[:space:]]*\([^#]*\).*/\1/p' kibot_settings.yaml | head -n1 | tr ',' ' ')"
+          found=
+          for b in ${boards:-.}; do
+            [ -f "$b/manufacturing/recipe.yaml" ] && found="$found $b"
+          done
+          echo "boards=${found# }" >> "$GITHUB_OUTPUT"
+          [ -n "$found" ] || echo "::notice::No manufacturing/recipe.yaml found; pcbcam check skipped."
+      - name: Install uv
+        if: steps.scan.outputs.boards != ''
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: pcbcam check
+        if: steps.scan.outputs.boards != ''
+        env:
+          BOARDS: ${{ steps.scan.outputs.boards }}
+          PCBCAM_SRC: ${{ vars.PCBCAM_SRC }}
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          kicad-cli version
+          for b in $BOARDS; do
+            echo "== pcbcam check $b =="
+            uvx --from "$PCBCAM_SRC" pcbcam check "$b"
+          done
