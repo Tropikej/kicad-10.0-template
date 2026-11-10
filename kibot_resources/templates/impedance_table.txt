@@ -1,0 +1,4 @@
+Transmission Line, Impedance [ohms], Tolerance, Layer, Trace Width [mm], Gap [mm], Gap to GND [mm], Ref. Layers
+Coated Microstrip, 50, ±10 %, L1 / L4, 0.3586, -, -, L2 / L3
+Edge-Coupled Coated Microstrip, 90, ±10 %, L1 / L4, 0.2906, 0.2032, -, L2 / L3
+Edge-Coupled Coated Microstrip, 100, ±10 %, L1 / L4, 0.2258, 0.2032, -, L2 / L3

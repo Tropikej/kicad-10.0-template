@@ -1,0 +1,62 @@
+# pcbcam recipe: how this board is milled on the Makera Z1.
+# Installed by ./run_kibot.sh --stackup makera_z1_2l (never overwritten), then
+# yours: commit it with the project.
+#
+#   pcbcam tools <project>   # tools and the clearance they need
+#   pcbcam check <project>   # export, DRC, fixture and hole checks
+#   pcbcam build <project>   # G-code in manufacturing-output/gcode
+#
+# The board sits where it is drawn inside the fixture footprint (FIXTURE): its
+# origin, the stock lower-left corner, is work zero.
+# EVERY NUMBER BELOW IS A STARTING POINT, NOT A VALIDATED SETTING.
+
+machine: makera_z1
+tools: tools.yaml
+fixture: fixture.yaml
+
+stock:                      # same size as the fixture footprint
+  size_x_mm: 100
+  size_y_mm: 160
+  thickness_mm: 1.5
+  copper_thickness_mm: 0.035
+
+heights:
+  safe_mm: 2
+  tool_change_mm: 15
+
+isolation:
+  side: front               # back side: coming with double-sided support
+  # Widest first: the 0.2 mm bit clears what it can, the last one isolates
+  # everything, e.g. [vbit_20_0.2, vbit_20_0.1]
+  tools: [vbit_20_0.2]
+  depth_mm: 0.08
+
+drilling:
+  tools: [drill_0.6, drill_0.7, drill_0.8, drill_0.9, drill_1.0, drill_1.1, drill_1.2]
+  depth_mm: 1.8
+  match_tolerance_mm: 0.02
+  milldrill_tool: endmill_2.0   # holes larger than every drill
+
+outline:
+  tool: endmill_2.0
+  depth_mm: 1.6
+  stepdown_mm: 0.4
+  tabs: {count: 4, width_mm: 1.5, height_mm: 0.5}
+
+# Engrave label text (V-bit traces the stroke centrelines). Draw it on these
+# layers in the default KiCad stroke font, >= ~2 mm tall. front_layer is cut as
+# drawn; back_layer is mirrored left-right about the flip axis (run after
+# flipping) -- tick the text "Mirrored" box in KiCad so back labels read
+# correctly on the finished back face. Remove a layer line to skip that side.
+# Needs the fixture for the back mirror.
+engrave:
+  tool: vbit_20_0.2
+  depth_mm: 0.10
+  front_layer: User.11
+  back_layer: User.12
+
+checks:
+  clearance_margin_mm: 0.02
+  min_track_width_mm: 0.25
+  min_annular_ring_mm: 0.25
+  min_hole_to_hole_mm: 0.5
