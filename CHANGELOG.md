@@ -4,6 +4,8 @@
 
 ### Fixed
 
+-   Refresh the bundled pcbcam fixture footprint now that the fixture is verified
+    (silk no longer says "UNVERIFIED pin positions"); geometry unchanged.
 -   Fixes
 
 ### Added
